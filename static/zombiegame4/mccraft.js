@@ -1,0 +1,424 @@
+// proudly created by Major League Game Development (i.e myself)
+
+var TEXH = 2048, TEXW = 2048;
+var canvas, player;
+var dirtPatches = [];
+var dirtOffset = 10000;
+var PHYSICSSTEPS = 3;
+const dist = 20;
+var running = true;
+var normalRef = [null, ["pos3","pos2"], ["pos1","pos4"], ["pos4","pos1"], ["pos2","pos3"]];
+var debugDispNow = {"hitboxes shown": false};
+var skyColors = [ // each one lasts for around 1/8 of a day
+[0.529, 0.807, 0.921], // sky blue: morning
+[0.784, 0.976, 0.98], // a bit lighter: noon
+[0.529, 0.807, 0.921], // sky blue: afternoon
+[0.98, 0.513, 0.078], // orange: sunset
+[0.1, 0.15, 0.2], // dusk
+[0.01, 0.07, 0.1], // midnight
+[0.337/4, 0.482/4, 0.749/4], // dawn
+[0.968, 0.105, 0.278], // sunrise
+[0.529, 0.807, 0.921] // morning again
+];
+var readyState = {
+	objs: false, imgs: false, terrain: false
+};
+var checkInterval = setInterval(function() {
+	var good = true;
+	for (var prop of readyState) {
+		if (!readyState[prop]) {
+			good = false; break;
+		}
+	}
+	if (good) {
+		document.getElementById("startBtn").innerHTML = "Play!";
+		clearInterval(checkInterval);
+	}
+});
+var lastInvSelect = 10;
+var firstTime = 0;
+var oTex = {
+	"resource": "RESOURCE MONITOR.png",
+	"inv": "INVENTORY.png",
+	"invPointer": "invselect.png",
+	"allLoaded": false
+};
+var audios = {
+	"pop": "/static/zombiegame4/gltf/sfx/pop.mp3"
+};
+var itemTexCoords = {};
+var oW, oH;
+
+var models = {zombie: false, elmTree: false, glgun: false, basicbullet: false, allLoaded: false};
+var animators = {zombie: false};
+
+function vec3_avg(a, b, c, d) {return [(a[0]+b[0]+c[0]+d[0])/2, (a[1]+b[1]+c[1]+d[1])/2, (a[2]+b[2]+c[2]+d[2])/2];}
+function vec3_cross(a, b) {
+	var out = [0,0,0]; glMatrix.vec3.cross(out, a, b);
+	glMatrix.vec3.normalize(out, out); return out;}
+function ns2(a, b) {
+	return noise.simplex2(a/10, b/10) * noise.simplex2(a/50, b/50)* noise.simplex2(a/50+1423, b/50+100007)*9 +
+	noise.simplex2(a*1.5, b*1.5) * noise.simplex2(a/10+100, b/10-69);
+}; // for easier typing
+function dirtSimplex(a, b) {
+	return noise.simplex2(a/10+dirtOffset, b/10+dirtOffset);
+}
+
+function debugUpdate() {
+	document.getElementById("debugStuff").innerHTML = JSON.stringify(debugDispNow);
+	document.getElementById("debugStuff").style.display = showDebug?"block":"none";
+}
+setInterval(debugUpdate, 20);
+
+
+window.onload = function() {
+	setTimeout(function() {
+		document.getElementById("startBtn").innerHTML = "Loading...";
+		noise.seed(TerrainGen.seed);
+		initGL("canvas");
+		Item.init();
+		Bullet.init();
+		// size the canvas
+		canvas.width = parseInt(
+			document.defaultView.getComputedStyle(canvas, "wot do i put here").width.replace("px", ""), 10);
+		canvas.height = parseInt(
+			document.defaultView.getComputedStyle(canvas, "wot do i put here").height.replace("px", ""), 10);
+		gl.viewport(0, 0, canvas.width, canvas.height);
+
+		overlay = document.getElementById("overlay");
+		overlay.width = canvas.width;
+		overlay.height = canvas.height;
+		oCtx = overlay.getContext("2d");
+		oCtx.fillStyle = "rgb(0, 0, 0)";
+		oCtx.font = "190px Open Sans";
+		oW = overlay.width; oH = overlay.height;
+
+		canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+		overlay.onclick = function() {canvas.requestPointerLock();};
+		document.exitPointerLock = document.exitPointerLock ||
+							document.mozExitPointerLock;
+		canvas.addEventListener("mousemove", onCameraTurn);
+		canvas.addEventListener("mousedown", ()=>{mouseDown = true;});
+		canvas.addEventListener("mouseup", ()=>{mouseDown = false;});
+		canvas.addEventListener("wheel", e=>{
+			if (e.deltaY > 0) {
+				if (player.selected == 3) {player.selected = 0;}
+				else if (player.inv[player.selected + 1]) {player.selected += 1;}
+			}
+			if (e.deltaY < 0) {
+				if (player.selected == 0) {player.selected = 3;}
+				else if (player.inv[player.selected - 1]) {player.selected -= 1;}
+			}
+		});
+
+		for (var prop in oTex) { // TODO: revamp canvas image loader
+			if (prop == "allLoaded") continue;
+			var img = new Image();
+			img.src = ('/static/zombiegame4/gltf/gui/' + oTex[prop]).slice(1);
+			oTex[prop] = img;
+		}
+		TerrainGen.init();
+		TerrainGen.generate(dist);
+		bindTexture(loadTexture("/static/zombiegame4/gltf/grass.png?rand_num="+Math.random()), 0);
+		flushUniforms();
+		flush("billboardShader");
+		flush("t4shader");
+		gl.enable(gl.DEPTH_TEST);
+
+		readyState++;
+	}, 0);
+}
+
+function gameHelp() {
+	document.getElementById("helpDiv").style.display = "block";
+	document.getElementById("helpBtn").innerHTML = "How to Play (scroll down)";
+}
+
+function divisionOnLoad() {
+	itemTexCoords = {
+		"Distilled Water": [0.875, 0.625],
+		"rocc": [0.75, 0.625],
+		"Wood": [0.625, 0.625]
+	};
+	function checker() {
+		var good = true;
+		for (var prop in models) {
+			if (!models[prop] && prop != "allLoaded") {good = false;}
+		}
+		if (good && models.allLoaded == false) {
+			animators.zombie = new AnimationRenderer(models.zombie, "objShader");
+			models.allLoaded = true;
+			setTimeout(function() {TerrainGen.lateGenerate(dist); readyState++;}, 100);
+		}
+	}
+	loadAnimation("static/zombiegame4/gltf/zombie poses/walk_", "static/zombiegame4/gltf/zombie poses/walk_", 30,
+(res)=>{models.zombie = res; checker()});
+	models.elmTree = true;
+	loadObj("static/zombiegame4/gltf/tree1.obj", "static/zombiegame4/gltf/tree1.mtl",
+(res)=>{models.elmTree = res; checker()});
+	loadObj("static/zombiegame4/gltf/GL gun.obj", "static/zombiegame4/gltf/GL gun.mtl",
+(res)=>{models.glgun = res; checker()})
+	loadObj("static/zombiegame4/gltf/basicbullet.obj", "static/zombiegame4/gltf/basicbullet.mtl",
+(res)=>{models.basicbullet = res; checker()})
+}
+
+function fire(e) {
+	new Bullet(player.pos[0]+player.cameraFront[0], player.pos[1]+player.cameraFront[1], player.pos[2]+player.cameraFront[2],
+		0.5, 10, player.cameraFront, models.basicbullet);
+}
+
+function startGame() {
+	if (readyState != MAXREADYSTATE) {return;}
+	player = new Player();
+	canvas.onclick = fire;
+	playerName = document.getElementById("nameBox").value;
+	oCtx.fillText("Loading...", 100, 100);
+	requestAnimationFrame(function(t) {firstTime = t;});
+    requestAnimationFrame(gameLoop);
+    document.getElementById("homeDiv").style.display = "none";
+	canvas.requestPointerLock();
+	new Zombie(10,10,0, 2,2,2, animators.zombie, 0.05, 10, 100);
+}
+var deadSong = new Audio("/static/zombiegame4/songs/pressure.mp3");
+deadSong.currentTime = 40.37;
+function ded(reason) {
+	document.getElementById("deadDiv").style.display = "block";
+	document.getElementById("deadReason").innerHTML = reason;
+	running = false;
+	deadSong.play();
+}
+
+function physicsUpdate(dt) {
+	for (var blanket of blanketObjects) {
+		for (var po of physicsObjects) {
+			po.vel[1] -= PhysicsObject.GlobalGravity * dt;
+			po.vel[0] *= PhysicsObject.friction ** (1/PHYSICSSTEPS); po.vel[1] *= PhysicsObject.friction ** (1/PHYSICSSTEPS); po.vel[2] *= PhysicsObject.friction ** (1/PHYSICSSTEPS);
+			if (!po.kinematic) {
+				po.pos[0] += po.vel[0] * dt; po.pos[1] += po.vel[1] * dt; po.pos[2] += po.vel[2] * dt;
+			}
+			var res = BlanketObject.checkCollideAABB(blanket, po, dt);
+			if (res.colliding) {
+				if (!po.kinematic) {po.pos = res.suggestedPos};
+				po.vel[1] = 0;
+			}
+		}
+	}
+	for (var i=0; i<physicsObjects.length; i++) {
+		for (var j=i+1; j<physicsObjects.length; j++) {
+			if (physicsObjects[i] && physicsObjects[j])
+				PhysicsObject.checkCollideAABB(physicsObjects[i], physicsObjects[j], dt);
+		}
+	}
+}
+
+function onCameraTurn(e) {
+	player.yaw   += e.movementX * 0.1;
+	player.pitch -= e.movementY * 0.1;
+	if (player.pitch > 89) { player.pitch = 89; }
+	if (player.pitch < -89) { player.pitch = -89; }
+
+	var front = glMatrix.vec3.create();
+	front[0] = Math.cos(glMatrix.glMatrix.toRadian(player.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(player.pitch));
+	front[1] = Math.sin(glMatrix.glMatrix.toRadian(player.pitch));
+	front[2] = Math.sin(glMatrix.glMatrix.toRadian(player.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(player.pitch))
+	glMatrix.vec3.normalize(player.cameraFront, front);
+}
+function processNumKeys() {
+	for (var i=1; i<=5; i++) {
+		if (divisDownKeys["Digit"+i]) {
+			player.invSelect = i-1;
+		}
+	}
+	if (player.invSelect != lastInvSelect) {
+		clearShaderData("overlayShader");
+		if (player.inv[player.invSelect]) {
+			shaderAddData({
+				aBillboardPos: player.selected.model.position, aColor: player.selected.model.color
+			}, "overlayShader");
+			flush("overlayShader");
+		}
+	}
+	lastInvSelect = player.invSelect;
+}
+
+var lastTime = -1;
+var DAYLENGTH = 30000;
+var COLORLENGTH = DAYLENGTH/8;
+function mix(a, b, amount) {
+	return a * (1 - amount) + b * amount;
+}
+
+function gameLoop(_t) {
+	if (!running) {return;}
+	_t -= firstTime;
+	// color calcs
+	var m = _t % DAYLENGTH;
+	var dayNum = Math.floor(_t / DAYLENGTH);
+	var amount = (m % COLORLENGTH) / COLORLENGTH;
+	var ind = Math.floor(m/COLORLENGTH);
+	debugDispNow["day number"] = dayNum;
+	var color1 = skyColors[ind];
+	var color2 = skyColors[ind+1];
+	c = [mix(color1[0], color2[0], amount), mix(color1[1], color2[1], amount), mix(color1[2], color2[2], amount)];
+	gl.clearColor(c[0], c[1], c[2], 1.0);
+	globalFogColor = [...c, 1.0];
+	globalFogAmount = 1 - (m/DAYLENGTH+0.9)%1;
+	globalFogAmount *= 2.0;
+	if (globalFogAmount > 1) {globalFogAmount = 2 - globalFogAmount;}
+	globalFogAmount *= 5.0;
+	// globalFogAmount = 0; // to make debugging easier;
+	debugDispNow["fog amt"] = globalFogAmount;
+	var adj = m - 1 * COLORLENGTH; // bc the sun position is a bit wank
+	var sunPosition = [Math.sin(adj / DAYLENGTH * 2 * Math.PI) * 50, Math.cos(adj / DAYLENGTH * 2 * Math.PI) * 30, 0];
+	lightingInfo[3] = c[0]; lightingInfo[4] = c[1]; lightingInfo[5] = c[2];
+	var normalizedSunPosition = glMatrix.vec3.create();
+	glMatrix.vec3.normalize(normalizedSunPosition, sunPosition);
+	glMatrix.vec3.multiply(normalizedSunPosition, normalizedSunPosition, [1.3, 1.3, 1.3]);
+	lightingInfo[0] = normalizedSunPosition[0]; lightingInfo[1] = normalizedSunPosition[1]; lightingInfo[2] = normalizedSunPosition[2];
+
+	oCtx.clearRect(0, 0, overlay.width, overlay.height);
+	// player.pos[1] = ns2(player.pos[0], player.pos[2])+2;
+	debugDispNow["player pos"] = player.pos;
+    var dt;
+    if (lastTime == -1) {dt = 0; lastTime = _t;} else {dt = _t - lastTime; lastTime = _t;}
+	dt = Math.min(dt, 70);
+    dt *= 0.1;
+	d_cameraPos[0] = player.pos[0]; d_cameraPos[1] = player.pos[1]; d_cameraPos[2] = player.pos[2];
+	var playerSpeed = 0.01 * player.speed;
+	if (divisDownKeys["Shift"]) {playerSpeed = 1000;}
+    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, playerSpeed * dt);
+    if(divisDownKeys["KeyA"]) { // a or <
+		var crossed = glMatrix.vec3.create();
+		var normalized = glMatrix.vec3.create();
+		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
+		glMatrix.vec3.normalize(normalized, crossed);
+        glMatrix.vec3.scale(normalized, normalized, playerSpeed * dt);
+		glMatrix.vec3.subtract(player.vel,
+			player.vel,
+			normalized);
+	}
+	if(divisDownKeys["KeyD"]) { // d or >
+		var crossed = glMatrix.vec3.create();
+		var normalized = glMatrix.vec3.create();
+		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
+		glMatrix.vec3.normalize(normalized, crossed);
+        glMatrix.vec3.scale(normalized, normalized, playerSpeed * dt);
+		glMatrix.vec3.add(player.vel,
+			player.vel,
+			normalized);
+	}
+	if(divisDownKeys["KeyW"]) { // w or ^
+		glMatrix.vec3.add(player.vel,
+			player.cameraFront,
+			player.vel);
+	}
+	if(divisDownKeys["KeyS"]) { // s or down
+		glMatrix.vec3.subtract(player.vel,
+			player.vel,
+			player.cameraFront,);
+	}
+	if (divisDownKeys["Space"]) {
+		player.vel[1] += dt * player.jumpPower;
+	}
+    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, 1/playerSpeed/dt);
+    var posPlusFront = glMatrix.vec3.create();
+    glMatrix.vec3.add(posPlusFront, [player.pos[0], player.pos[1] + 1, player.pos[2]], player.cameraFront);
+    glMatrix.mat4.lookAt(modelViewMatrix,
+        [player.pos[0], player.pos[1] + 1, player.pos[2]],
+        posPlusFront,
+        glMatrix.vec3.fromValues(0, 1, 0));
+	for (var i=0; i<PHYSICSSTEPS; i++) {
+		physicsUpdate(dt/PHYSICSSTEPS);
+	}
+	
+    flushUniforms();
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+	for (var prop in animators) {
+		animators[prop].frameNum = Math.floor(_t*1.33/50%30)+1;
+	}
+
+	// mob spawning
+	var x = _t / DAYLENGTH;
+	if (Math.random() < 2*Math.abs(x - Math.floor(x + 0.5)) && Math.random() < 0.05) {
+		new Zombie(Math.random() * 10, 10, Math.random() * 10, 2,2,2, animators.zombie, 0.05 * Math.random(), 10 * Math.random()
+		, 10 + 100 * Math.random());
+	}
+
+	player.update();
+	Item.update();
+	Bullet.update(dt);
+	useShader("objShader");
+	animators.zombie.bindAttributes();
+	Zombie.update(dt);
+
+    useShader("t4shader");
+    gl.drawArrays(gl.TRIANGLES, 0, buffers_d.t4shader.data.aVertexPosition.length/3);
+
+	useShader("billboardShader");
+	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.billboardShader.data.aCenterOffset.length/3);
+	gl.uniform1f(buffers_d.billboardShader.uniform.uAlphaAdj, 0.999);
+
+	useRenderBuffer(Item.address, "billboardShader");
+	gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Item.address, "billboardShader").aCorner.length/2);
+
+	gl.useProgram(buffers_d.transformShader.compiled);
+	useRenderBuffer(Bullet.address, "transformShader");
+	gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Bullet.address, "transformShader").aVertexPosition.length/3);
+
+	useShader("shaderProgram");
+	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.shaderProgram.data.aVertexPosition.length/3);
+
+	useShader("objShader");
+	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.objShader.data.aColor.length/4);
+
+	useShader("transformShader");
+	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.transformShader.data.aVertexPosition.length/3);
+
+	useShader("overlayShader");
+	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.overlayShader.data.aBillboardPos.length/3);
+
+	oCtx.drawImage(oTex.resource, oW*0.69, oH * 0.6, oW * 0.3, oW*0.3*oTex.resource.height/oTex.resource.width);
+	var offset = 0;
+	oCtx.font = "40px Calibri";
+	oCtx.fillStyle = "#DDFFDD";
+	for (var prop in player.resources) {
+		oCtx.fillText(prop + ": " + player.resources[prop], oW*0.71, oH*0.68 + offset);
+		offset += 45;
+	}
+	{ // inv
+		processNumKeys();
+		let ratio = oTex.inv.height / oTex.inv.width;
+		let width = oW * 0.4;
+		let height = width * ratio;
+		let left = oW * 0.5 - width/2;
+		let top = oH * 0.85 - height/2;
+		let squareWidth = 174/oTex.inv.width * width;
+		
+		oCtx.drawImage(oTex.inv, left, top, width, height);
+		oCtx.drawImage(oTex.invPointer, left + 33/oTex.inv.width * width + squareWidth * player.invSelect - oTex.invPointer.width/4,
+			top - oH * 0.1);
+		if (player.selected) {
+			oCtx.font = "30px Calibri";
+			oCtx.fillText(player.selected.name, left + squareWidth * 2, top + 25);
+		}
+	}
+	// crosshair
+	oCtx.fillStyle = "rgb(0,0,0)";
+	oCtx.strokeRect(oW*0.48, oH*0.48, oW*0.04, oH*0.04);
+	oCtx.fillRect(oW*0.495, oH*0.5-oW*0.005, oW*0.01, oW*0.01);
+
+	// health bar
+	oCtx.strokeRect(oW*0.3, oH*0.05, oW*0.4, oH*0.05);
+	oCtx.fillStyle = "rgb(" + mix(0, 255, 1-player.health/player.maxHealth) + "," + mix(0, 255, player.health/player.maxHealth) +
+		",25)";
+	oCtx.fillRect(oW*0.3, oH*0.05, oW*0.4*player.health/player.maxHealth, oH*0.05);
+	debugDispNow["player health"] = player.health;
+
+	if (debugDispNow["hitboxes shown"]) {
+		for (var i=1; i<physicsObjects.length; i++) {
+			physicsObjects[i].drawBox(!physicsObjects[i].kinematic?[0,1,0,1]:[1,0,0,1]);
+		}
+	}
+    requestAnimationFrame(gameLoop);
+}
