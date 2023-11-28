@@ -4,10 +4,11 @@
 	<head>
 		<title>zombie warz</title>
 		<!-- js -->
+		<script>var TEXH = 2048, TEXW = 2048;</script>
 		<script type="text/javascript"
 			src="{{ url_for('static', filename='multiplayer_3d_game/gl-matrix.js') }}"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-		<link rel="stylesheet" href="/static/multiplayer_3d_game/multiplayer_3d_game.css">
+		<link rel="stylesheet" href="/static/multiplayer_3d_game/multiplayer_3d_game.css?ver={{rnd}}">
 		<!-- fonts -->
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +29,7 @@
 					<h1>Zombie Wars (now 3D)</h1>
 					<input type="text" id="nameBox" placeholder="Your Name">
 					<br><br>
-					<button id="startBtn" onclick = "startGame();">Loading...</button>
+					<button id="startBtn" onclick = "startGame();">Loading (don't click)</button>
 					<br><br>
 					<button id="helpBtn" onclick="gameHelp();">How to Play</button>
 					<div id="helpDiv" style="display:none;">
@@ -63,15 +64,16 @@
 			</div>
 		</div>
 		<!-- ------------------ -->
-		<script type="text/javascript" src="/static/zombiegame4/classes.js"></script>
-		<script type="text/javascript" src="/static/zombiegame4/terrain.js"></script>
-	 <script type="text/javascript"
-			src="/static/shaders2.js" defer></script>
-	<script type="text/javascript"
-			src="/static/division3.js" defer></script>
-	<script type="text/javascript" src="/static/zombiegame4/keys.js"></script>
-		<script type="text/javascript" src="/static/zombiegame4/mccraft.js"></script>
 		<script type="text/javascript"
-			src="{{ url_for('static', filename='multiplayer_3d_game/perlin.js') }}" defer></script>
+			src="/static/shaders2.js?ver={{rnd}}"></script>
+	<script type="text/javascript"
+			src="/static/division3.js?ver={{rnd}}"></script>
+	<script type="text/javascript" src="/static/zombiegame4/keys.js?ver={{rnd}}" defer></script>
+		<script type="text/javascript" src="/static/zombiegame4/loader.js?ver={{rnd}}" defer></script>
+		<script type="text/javascript" src="/static/zombiegame4/classes.js?ver={{rnd}}" defer></script>
+		<script type="text/javascript" src="/static/zombiegame4/terrain.js?ver={{rnd}}" defer></script>
+		<script type="text/javascript" src="/static/zombiegame4/mccraft.js?ver={{rnd}}" defer></script>
+		<script type="text/javascript"
+			src="{{ url_for('static', filename='multiplayer_3d_game/perlin.js') }}"></script>
 </body>
 </html>

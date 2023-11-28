@@ -207,7 +207,7 @@ void main() {
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
 	highp vec3 vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
 	vColor = vec4(aColor.rgb * vLighting, aColor.a); // I really should mix it in the frag shader, but I'm trying to use fsSource so w h a t e v e r
-	vColor = mix(vColor, uFogColor, clamp(fogAmount, 0.0, 1.0)*uFogAmount);
+	vColor = mix(vColor, uFogColor, clamp(clamp(fogAmount, 0.0, 1.0)*uFogAmount*1.0, 0.0, 1.0));
 }
 `;
 const textureFS = `

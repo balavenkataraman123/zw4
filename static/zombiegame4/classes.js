@@ -26,6 +26,7 @@ class PhysicsObject {
         this.ignores = new Set();
         this.dx = dx; this.dy = dy; this.dz = dz;
         this.kinematic = kin;
+        this.removed = false;
         if (add) {physicsObjects.push(this);}
     }
     drawBox(c = [1,0,0,1]) {
@@ -139,8 +140,8 @@ class Player extends PhysicsObject {
     constructor() {
         super(0, 10, 0, 2, 2, 2);
         this.yaw = 0.0; this.pitch = 0.0;
-        this.cameraFront = glMatrix.vec3.create();
-        this.cameraUp = glMatrix.vec3.fromValues(0, 1, 0);
+        this.cameraFront = new Float32Array(16);
+        this.cameraUp = new Float32Array([0,1,0]);
         this.jumpPower = 0.02;
         this.health = 100;
         this.maxHealth = 100;
@@ -150,9 +151,7 @@ class Player extends PhysicsObject {
         this.inv = [{name: "GL Gun", model: models.glgun}, false, false, false, false];
         this.selected = this.inv[0];
         this.iframe = false;
-        this.resources = {
-            "Wood": 0, "rocc": 0, "Distilled Water": 0
-        };
+        this.stuff = {"Wood": 0, "rocc": 0, "Distilled Water": 0};
     }
     takeDamage(damage) {
         if (!this.iframe) {
@@ -160,6 +159,13 @@ class Player extends PhysicsObject {
             this.iframe = true;
             var t = this;
             setTimeout(function() {t.iframe = false;}, 500);
+        }
+    }
+    addToStuff(name, amt) {
+        if (this.stuff[name] !== undefined) {
+            this.stuff[name] += amt;
+        } else {
+            this.stuff[name] = amt;
         }
     }
     update() {
@@ -201,22 +207,9 @@ class Item extends PhysicsObject {
     }
     onCollision(aabb) {
         if (aabb == player) {
-            if (player.resources[this.name] !== undefined) {
-                player.resources[this.name]++;
-                for (var i=0; i<items.length; i++) {
-                    if (items[i] == this) {
-                        items.splice(i, 1);
-                        break;
-                    }
-                }
-                for (var i=0; i<physicsObjects.length; i++) {
-                    if (physicsObjects[i] == this) {
-                        physicsObjects.splice(i, 1);
-                        break;
-                    }
-                }
-                new Audio(audios.pop).play();
-            }
+            player.addToStuff(this.name, 1);
+            this.removed = true;
+            new Audio(audios.pop).play();
         }
     }
     static address;
@@ -224,6 +217,7 @@ class Item extends PhysicsObject {
        Item.address = createRenderBuffer("billboardShader");
     }
     static update() {
+        items = items.filter((it)=>!it.removed);
         var d = getRBdata(Item.address, "billboardShader");
         for (var prop in d) {
             d[prop] = [];
@@ -232,57 +226,6 @@ class Item extends PhysicsObject {
             it.refreshData();
         }
         flushRB(Item.address, "billboardShader");
-    }
-}
-
-class AnimationRenderer {
-    constructor(data, shaderName) {
-        for (var i=0; i<data.length; i++) {
-            var a = createRenderBuffer(shaderName);
-            if (i == 0) {this.address = a;}
-            var d = getRBdata(a, shaderName);
-            for (var prop in data[i+1]) {
-                d[AnimationRenderer.propertyLookup[shaderName][prop]] = (data[i+1][prop]);
-            }
-            flushRB(a, shaderName);
-        }
-        this.frameNum = 10;
-        this.length = data.length;
-        this.data = data;
-        this.shaderName = shaderName;
-    }
-    bindAttributes() {
-        gl.useProgram(buffers_d[this.shaderName].compiled);
-        useRenderBuffer(this.address+this.frameNum-1, this.shaderName);
-    }
-    render(pos, ea) {
-        // assumes bindAttributes has already been called
-        var old = glMatrix.mat4.create();
-        old.set(modelViewMatrix);
-        // oml im so smart 😎
-        var front = glMatrix.vec3.create();
-        front[0] = Math.cos(glMatrix.glMatrix.toRadian(ea[0])) * Math.cos(glMatrix.glMatrix.toRadian(ea[1]));
-        front[1] = Math.sin(glMatrix.glMatrix.toRadian(ea[1]));
-        front[2] = Math.sin(glMatrix.glMatrix.toRadian(ea[0])) * Math.cos(glMatrix.glMatrix.toRadian(ea[1]));
-        glMatrix.vec3.normalize(front, front);
-        var posPlusFront = glMatrix.vec3.create();
-        glMatrix.vec3.add(posPlusFront, pos, front);
-        var look = glMatrix.mat4.create();
-        glMatrix.mat4.targetTo(look, pos, posPlusFront, [0,1,0]);
-        glMatrix.mat4.multiply(modelViewMatrix, modelViewMatrix, look);
-        flushUniforms();
-        gl.useProgram(buffers_d[this.shaderName].compiled);
-        gl.drawArrays(gl.TRIANGLES, 0, this.data[1]["position"].length/3);
-        modelViewMatrix = old;
-        flushUniforms();
-    }
-    static propertyLookup = {
-        "objShader": {
-            "position": "aVertexPosition", "color": "aColor", "normal": "aVertexNormal"
-        },
-        "shaderProgram": {
-            "position": "aVertexPosition", "color": "aTexCoord", "normal": "aVertexNormal"
-        }
     }
 }
 
@@ -298,7 +241,6 @@ class Zombie extends PhysicsObject {
         if (add) {zombies.push(this);}
     }
     static update(dt) {
-        var deletionIndices = [];
         var index = 0; // most convoluted way
         for (var zomb of zombies) {
             zomb.angles = [Math.atan2(player.avgPos[2] - zomb.pos[2], player.avgPos[0] - zomb.pos[0]) * 180/Math.PI-90, zomb.attacking?10:0];
@@ -342,6 +284,7 @@ class Bullet extends PhysicsObject {
         Bullet.address = createRenderBuffer("transformShader");
     }
     static update(dt) {
+        bullets = bullets.filter((bul)=>!bul.removed);
         var datas = getRBdata(Bullet.address, "transformShader");
         datas.aVertexPosition = []; datas.aColor = []; datas.aVertexNormal = []; datas.aTranslation = []; datas.aYRot = [];
         var index = 0;
@@ -350,9 +293,8 @@ class Bullet extends PhysicsObject {
             var adjFront = glMatrix.vec3.create();
             glMatrix.vec3.scale(adjFront, bul.front, bul.speed * dt);
             bul.vel = adjFront;
-            if (glMatrix.vec3.dist(bul.pos, player.pos) > 50 || bul.timer < 0) {
-                bullets.removeElement(bul);
-                physicsObjects.removeElement(bul);
+            if (glMatrix.vec3.dist(bul.pos, player.pos) > 50 || bul.timer < 0 || bul.removed) {
+                bul.removed = true;
             }
             datas.aVertexPosition = datas.aVertexPosition.concat(bul.model.position);
             datas.aColor = datas.aColor.concat(bul.model.color);

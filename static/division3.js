@@ -314,7 +314,7 @@ const D_PLANE = function(w, l) {
 }
 
 class ParticleSystem { // yet another jimmy-rigged contraption
-	constructor(position, emitter, startVelocity, lifetime, texCoordStart, texCoordDimension, size,
+	constructor(position, emitter, startVelocity, lifetime, texCoordStart, texCoordDimension, size, numParticles = 30,
 			timer = Infinity, numCycles = 10) {
 		this.position = position;
 		this.emitFunc = emitter;
@@ -332,7 +332,6 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 		this.startTime = theTime;
 		this.timer = timer;
 		this.numCycles = numCycles;
-		debugDispNow["numCycles"] = this.numCycles;
 		this.texCoordsCycle = [1, 1, // 149, 179 is the start of the smoke texture, and it is 61x61
 							  0, 1,
 							  0, 0,
@@ -355,7 +354,6 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 		for (let a=0; a<this.cycle.length; a++) {
 			this.cycle[a] *= size
 		}
-		var numParticles = 30;
 		for (let j=0; j<numParticles/*change later*/; j++) {
 			var computed = Array.from(this.emitFunc());
 			var lifetime = Math.random()*5+5;
@@ -377,7 +375,7 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 		flush("particleShader");
 	}
 	render() {
-		gl.useProgram(buffers_d.particleShader.compiled);
+		useShader("particleShader");
 		gl.uniform3f(buffers_d.particleShader.uniform.uParticleEmitter, ...this.position);
 		gl.uniform1f(buffers_d.particleShader.uniform.uStartTime, this.startTime);
 		gl.uniform1i(buffers_d.particleShader.uniform.uNumCycles, this.numCycles);
@@ -385,10 +383,10 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 	}
 }
 
-function updateParticles(particles) { // to render all particles and delete old ones
+function updateParticles(particles, dt=40) { // to render all particles and delete old ones
 	for (let i=0; i<particles.length; i++) {
 		particles[i].render();
-		particles[i].timer--;
+		particles[i].timer -= dt;
 		if (particles[i].timer < 0) {
 			particles.splice(i, 1);
 			(async () => {
@@ -558,6 +556,8 @@ function initGL(canvName) {
 		}
 	};
 	initShadersAndBuffers();
+	gl.enable(gl.BLEND);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	shaderAddData({aID: [0.0, 1.0]}, "debugShader");
 	flush("debugShader");
 	try { // if you don't have a divisionOnLoad function or sth idk

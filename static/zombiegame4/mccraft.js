@@ -1,8 +1,8 @@
 // proudly created by Major League Game Development (i.e myself)
 
-var TEXH = 2048, TEXW = 2048;
 var canvas, player;
 var dirtPatches = [];
+var particles = [];
 var dirtOffset = 10000;
 var PHYSICSSTEPS = 3;
 const dist = 20;
@@ -20,37 +20,18 @@ var skyColors = [ // each one lasts for around 1/8 of a day
 [0.968, 0.105, 0.278], // sunrise
 [0.529, 0.807, 0.921] // morning again
 ];
-var readyState = {
-	objs: false, imgs: false, terrain: false
-};
-var checkInterval = setInterval(function() {
-	var good = true;
-	for (var prop of readyState) {
-		if (!readyState[prop]) {
-			good = false; break;
-		}
-	}
-	if (good) {
-		document.getElementById("startBtn").innerHTML = "Play!";
-		clearInterval(checkInterval);
-	}
-});
 var lastInvSelect = 10;
 var firstTime = 0;
-var oTex = {
-	"resource": "RESOURCE MONITOR.png",
-	"inv": "INVENTORY.png",
-	"invPointer": "invselect.png",
-	"allLoaded": false
-};
 var audios = {
-	"pop": "/static/zombiegame4/gltf/sfx/pop.mp3"
+	"pop": "/static/zombiegame4/gltf/sfx/pop.mp3",
+	"tree": "/static/zombiegame4/gltf/sfx/tree.mp3",
+	"tree2": "/static/zombiegame4/gltf/sfx/tree2.mp3",
+	"rock1": "/static/zombiegame4/gltf/sfx/rockbullet1.mp3",
+	"rock2": "/static/zombiegame4/gltf/sfx/rockbullet2.mp3",
+	"rock2": "/static/zombiegame4/gltf/sfx/rockbullet3.mp3",
 };
-var itemTexCoords = {};
 var oW, oH;
-
-var models = {zombie: false, elmTree: false, glgun: false, basicbullet: false, allLoaded: false};
-var animators = {zombie: false};
+var readyState = 69; // legacy for compatibility, actually has no function
 
 function vec3_avg(a, b, c, d) {return [(a[0]+b[0]+c[0]+d[0])/2, (a[1]+b[1]+c[1]+d[1])/2, (a[2]+b[2]+c[2]+d[2])/2];}
 function vec3_cross(a, b) {
@@ -71,95 +52,59 @@ function debugUpdate() {
 setInterval(debugUpdate, 20);
 
 
-window.onload = function() {
-	setTimeout(function() {
-		document.getElementById("startBtn").innerHTML = "Loading...";
-		noise.seed(TerrainGen.seed);
-		initGL("canvas");
-		Item.init();
-		Bullet.init();
-		// size the canvas
-		canvas.width = parseInt(
-			document.defaultView.getComputedStyle(canvas, "wot do i put here").width.replace("px", ""), 10);
-		canvas.height = parseInt(
-			document.defaultView.getComputedStyle(canvas, "wot do i put here").height.replace("px", ""), 10);
-		gl.viewport(0, 0, canvas.width, canvas.height);
+var dredy = function() {
+	console.log("all things loaded");
+	clearInterval(chkHandle);
+	document.getElementById("startBtn").innerHTML = "Start!";
+	noise.seed(TerrainGen.seed);
+	Item.init();
+	Bullet.init();
+	// size the canvas
+	canvas.width = parseInt(
+		document.defaultView.getComputedStyle(canvas, "wot do i put here").width.replace("px", ""), 10);
+	canvas.height = parseInt(
+		document.defaultView.getComputedStyle(canvas, "wot do i put here").height.replace("px", ""), 10);
+	gl.viewport(0, 0, canvas.width, canvas.height);
 
-		overlay = document.getElementById("overlay");
-		overlay.width = canvas.width;
-		overlay.height = canvas.height;
-		oCtx = overlay.getContext("2d");
-		oCtx.fillStyle = "rgb(0, 0, 0)";
-		oCtx.font = "190px Open Sans";
-		oW = overlay.width; oH = overlay.height;
+	overlay = document.getElementById("overlay");
+	overlay.width = canvas.width;
+	overlay.height = canvas.height;
+	oCtx = overlay.getContext("2d");
+	oCtx.fillStyle = "rgb(0, 0, 0)";
+	oCtx.font = "190px Open Sans";
+	oW = overlay.width; oH = overlay.height;
 
-		canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-		overlay.onclick = function() {canvas.requestPointerLock();};
-		document.exitPointerLock = document.exitPointerLock ||
-							document.mozExitPointerLock;
-		canvas.addEventListener("mousemove", onCameraTurn);
-		canvas.addEventListener("mousedown", ()=>{mouseDown = true;});
-		canvas.addEventListener("mouseup", ()=>{mouseDown = false;});
-		canvas.addEventListener("wheel", e=>{
-			if (e.deltaY > 0) {
-				if (player.selected == 3) {player.selected = 0;}
-				else if (player.inv[player.selected + 1]) {player.selected += 1;}
-			}
-			if (e.deltaY < 0) {
-				if (player.selected == 0) {player.selected = 3;}
-				else if (player.inv[player.selected - 1]) {player.selected -= 1;}
-			}
-		});
-
-		for (var prop in oTex) { // TODO: revamp canvas image loader
-			if (prop == "allLoaded") continue;
-			var img = new Image();
-			img.src = ('/static/zombiegame4/gltf/gui/' + oTex[prop]).slice(1);
-			oTex[prop] = img;
+	canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+	overlay.onclick = function() {canvas.requestPointerLock();};
+	document.exitPointerLock = document.exitPointerLock ||
+						document.mozExitPointerLock;
+	canvas.addEventListener("mousemove", onCameraTurn);
+	canvas.addEventListener("mousedown", ()=>{mouseDown = true;});
+	canvas.addEventListener("mouseup", ()=>{mouseDown = false;});
+	canvas.addEventListener("wheel", e=>{
+		if (e.deltaY > 0) {
+			if (player.selected == 3) {player.selected = 0;}
+			else if (player.inv[player.selected + 1]) {player.selected += 1;}
 		}
-		TerrainGen.init();
-		TerrainGen.generate(dist);
-		bindTexture(loadTexture("/static/zombiegame4/gltf/grass.png?rand_num="+Math.random()), 0);
-		flushUniforms();
-		flush("billboardShader");
-		flush("t4shader");
-		gl.enable(gl.DEPTH_TEST);
+		if (e.deltaY < 0) {
+			if (player.selected == 0) {player.selected = 3;}
+			else if (player.inv[player.selected - 1]) {player.selected -= 1;}
+		}
+	});
 
-		readyState++;
-	}, 0);
+	TerrainGen.init();
+	TerrainGen.generate(dist);
+	flushUniforms();
+	flush("billboardShader");
+	flush("t4shader");
+	gl.enable(gl.DEPTH_TEST);
+
+	readyState++;
 }
 
 function gameHelp() {
 	document.getElementById("helpDiv").style.display = "block";
 	document.getElementById("helpBtn").innerHTML = "How to Play (scroll down)";
-}
-
-function divisionOnLoad() {
-	itemTexCoords = {
-		"Distilled Water": [0.875, 0.625],
-		"rocc": [0.75, 0.625],
-		"Wood": [0.625, 0.625]
-	};
-	function checker() {
-		var good = true;
-		for (var prop in models) {
-			if (!models[prop] && prop != "allLoaded") {good = false;}
-		}
-		if (good && models.allLoaded == false) {
-			animators.zombie = new AnimationRenderer(models.zombie, "objShader");
-			models.allLoaded = true;
-			setTimeout(function() {TerrainGen.lateGenerate(dist); readyState++;}, 100);
-		}
-	}
-	loadAnimation("static/zombiegame4/gltf/zombie poses/walk_", "static/zombiegame4/gltf/zombie poses/walk_", 30,
-(res)=>{models.zombie = res; checker()});
-	models.elmTree = true;
-	loadObj("static/zombiegame4/gltf/tree1.obj", "static/zombiegame4/gltf/tree1.mtl",
-(res)=>{models.elmTree = res; checker()});
-	loadObj("static/zombiegame4/gltf/GL gun.obj", "static/zombiegame4/gltf/GL gun.mtl",
-(res)=>{models.glgun = res; checker()})
-	loadObj("static/zombiegame4/gltf/basicbullet.obj", "static/zombiegame4/gltf/basicbullet.mtl",
-(res)=>{models.basicbullet = res; checker()})
 }
 
 function fire(e) {
@@ -168,7 +113,6 @@ function fire(e) {
 }
 
 function startGame() {
-	if (readyState != MAXREADYSTATE) {return;}
 	player = new Player();
 	canvas.onclick = fire;
 	playerName = document.getElementById("nameBox").value;
@@ -189,6 +133,7 @@ function ded(reason) {
 }
 
 function physicsUpdate(dt) {
+	physicsObjects = physicsObjects.filter((p)=>!p.removed);
 	for (var blanket of blanketObjects) {
 		for (var po of physicsObjects) {
 			po.vel[1] -= PhysicsObject.GlobalGravity * dt;
@@ -231,6 +176,7 @@ function processNumKeys() {
 	}
 	if (player.invSelect != lastInvSelect) {
 		clearShaderData("overlayShader");
+		player.selected = player.inv[player.invSelect];
 		if (player.inv[player.invSelect]) {
 			shaderAddData({
 				aBillboardPos: player.selected.model.position, aColor: player.selected.model.color
@@ -339,15 +285,17 @@ function gameLoop(_t) {
 	}
 
 	// mob spawning
-	var x = _t / DAYLENGTH;
+	
+	/*var x = _t / DAYLENGTH;
 	if (Math.random() < 2*Math.abs(x - Math.floor(x + 0.5)) && Math.random() < 0.05) {
 		new Zombie(Math.random() * 10, 10, Math.random() * 10, 2,2,2, animators.zombie, 0.05 * Math.random(), 10 * Math.random()
 		, 10 + 100 * Math.random());
-	}
+	}*/
 
 	player.update();
 	Item.update();
 	Bullet.update(dt);
+	updateParticles(particles, dt*10);
 	useShader("objShader");
 	animators.zombie.bindAttributes();
 	Zombie.update(dt);
@@ -382,8 +330,10 @@ function gameLoop(_t) {
 	var offset = 0;
 	oCtx.font = "40px Calibri";
 	oCtx.fillStyle = "#DDFFDD";
-	for (var prop in player.resources) {
-		oCtx.fillText(prop + ": " + player.resources[prop], oW*0.71, oH*0.68 + offset);
+	var renderStuff = {"Wood": player.stuff.Wood, "rocc": player.stuff.rocc,
+		"Distilled Water": player.stuff["Distilled Water"], "": "Press E for inventory"};
+	for (var prop in renderStuff) {
+		oCtx.fillText(prop + ": " + renderStuff[prop], oW*0.71, oH*0.68 + offset);
 		offset += 45;
 	}
 	{ // inv

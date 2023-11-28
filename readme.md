@@ -1,6 +1,7 @@
 alright guys so heres the plan for zombiewars 4
 
-same core shooter concept
+~~same core shooter concept~~
+nvm its gonna be mostly the machines doing the work, player just collects resources
 
 Graphics:
 - better graphics in general
@@ -17,6 +18,8 @@ Mechanics:
   - trees and rocc
 - make towers and place towers to defend the shawarma
 - also you can dye towers and make skins for them and there are building blocks so you can play mc as well
+- you can spawn bosses (kind of like spawning the wither in mc) to gain xp
+- objective is to stay alive for as long as possible while also gaining as much xp as possible
 
 Dimensions:
 - you start in an earthlike dimension called "ground 1"
@@ -40,4 +43,5 @@ Dimensions:
 Guns and items:
 - for guns just port over from zombiewars 3 and get someone to do 3d modeling
 - resources: wood, rocc, distilled water, iron, silicon, cobalt-60
-- 
+- minecraft type inventory so we can have as many item types as we want
+  - this will further scientific and chemistry education as i force everyone to learn about radioisotopes

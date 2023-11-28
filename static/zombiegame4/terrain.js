@@ -121,12 +121,72 @@ class ElmTree extends PhysicsObject {
     constructor(x, y, z, add = true) {
         super(x, y+3, z, 0.5, 5, 0.5, true);
         this.x = x; this.y = y; this.z = z;
+        this.lastharvested = Date.now();
         if (!add) {return;}
         shaderAddData({
             aVertexPosition: models.elmTree.position, aVertexNormal: models.elmTree.normal, aColor: models.elmTree.color,
             aYRot: mList([Math.random()], models.elmTree.position.length/3), aTranslation: mList([x, y, z], models.elmTree.position.length/3)
         }, "transformShader");
-        flush("transformShader")
+        flush("transformShader");
+    }
+    onCollision(o) {
+        var idx = bullets.find(function(a) {return a == o;});
+        if (idx !== undefined) {
+            if (Date.now() > this.lastharvested + 1000 && Math.random() < 0.3) {
+                new Item([this.x + Math.random()*5, this.y + Math.random() * 5, this.z + Math.random() * 10], "Wood",
+                    itemTexCoords.Wood, [0.125, 0.125]);
+                this.lastharvested = Date.now();
+                var name;
+                if (Math.random() < 0.5) {name = "tree";} else {name = "tree2";}
+                var aux = new Audio(audios[name]);
+                aux.volume = 0.5;
+                aux.play();
+
+                if (Math.random() < 0.1) { // no more wood for 60s (actually 61)
+                    this.lastharvested = Date.now()+60000;
+                    TerrainGen.cooldownParticles([this.x, this.y+1, this.z]);
+                }
+            }
+            o.removed = true;
+            TerrainGen.hitparticles([this.x, this.y+1, this.z]);
+        }
+    }
+}
+
+class Rock extends PhysicsObject {
+    constructor(x, y, z, add = true, type = "iron1") {
+        super(x, y, z, 1, 1, 1, true);
+        this.x = x; this.y = y; this.z = z;
+        this.type = type;
+        this.lastharvested = Date.now();
+        if (!add) {return;}
+        shaderAddData({
+            aVertexPosition: models[type].position, aVertexNormal: models[type].normal, aColor: models[type].color,
+            aYRot: mList([Math.random()*2*Math.PI], models[type].position.length/3), aTranslation: mList([x, y, z], models[type].position.length/3)
+        }, "transformShader");
+        flush("transformShader");
+    }
+    onCollision(o) {
+        var idx = bullets.find(function(a) {return a == o;});
+        if (idx !== undefined) {
+            if (Date.now() > this.lastharvested + 1000 && Math.random() < 0.3) {
+                new Item([this.x + Math.random()*5, this.y + Math.random() * 5, this.z + Math.random() * 10], "rocc",
+                    itemTexCoords.rocc, [0.125, 0.125]);
+                this.lastharvested = Date.now();
+                var name;
+                if (Math.random() < 0.5) {name = "rock1";} else {name = "rock2";}
+                var aux = new Audio(audios[name]);
+                aux.volume = 0.5;
+                aux.play();
+
+                if (Math.random() < 0.1) { // no more rock for 60s (actually 61)
+                    this.lastharvested = Date.now()+60000;
+                    TerrainGen.cooldownParticles([this.x, this.y+1, this.z]);
+                }
+            }
+            o.removed = true;
+            TerrainGen.hitparticles([this.x, this.y+1, this.z]);
+        }
     }
 }
 
@@ -135,6 +195,7 @@ class TerrainGen { // basically a static class for my static brain
     static grassPatches = [];
     static seed = 6969;
     static trees = [];
+    static rocks = [];
     static init() {
         new BlanketObject(function(x, z) {
             var count = 0; var sum = 0;
@@ -165,6 +226,7 @@ class TerrainGen { // basically a static class for my static brain
             gp.push(new TallGrass(dist * TerrainRandom.urand(), dist * TerrainRandom.urand(), TerrainRandom.rand()*100+50, 0.010+0.015*TerrainRandom.rand(), true));
         }
         console.log("tall grass in " + (Date.now() - startTime));
+        TerrainGen.lateGenerate(dist);
     }
     static lateGenerate(dist) {
         // for things that need the objs to be done loading
@@ -178,5 +240,17 @@ class TerrainGen { // basically a static class for my static brain
                 new Item([x + TerrainRandom.urand()*10, 10, z + TerrainRandom.urand()*10], "Wood", itemTexCoords.Wood, [0.125, 0.125]);
             }
         }
+        // generate the rocks
+        for (var i=0; i<TerrainRandom.rand() * 4+5; i++) {
+            var x = TerrainRandom.urand() * dist; var z = TerrainRandom.urand() * dist;
+            TerrainGen.rocks.push(new Rock(x, ns2(x, z), z, true,
+                ["rock1", "rock2", "rock3", "iron1", "iron2", "silicon"][Math.floor(Math.random() * 6)]));
+        }
+    }
+    static cooldownParticles(pos) {
+        particles.push(new ParticleSystem(pos, D_ONE_POINT(), 3, 7, [1024/TEXW,1280/TEXH], 256/TEXW, 0.3, 10, 60000, 10000));
+    }
+    static hitparticles(pos) {
+        particles.push(new ParticleSystem(pos, D_ONE_POINT(), 20, 0.02, [1024/TEXW,1280/TEXH], 256/TEXW, 0.3, 20, 400, 1));
     }
 }
