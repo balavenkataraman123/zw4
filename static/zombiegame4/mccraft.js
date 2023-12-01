@@ -6,6 +6,7 @@ var particles = [];
 var dirtOffset = 10000;
 var PHYSICSSTEPS = 3;
 const dist = 20;
+var invRenderer = false;
 var running = true;
 var normalRef = [null, ["pos3","pos2"], ["pos1","pos4"], ["pos4","pos1"], ["pos2","pos3"]];
 var debugDispNow = {"hitboxes shown": false};
@@ -110,10 +111,15 @@ function gameHelp() {
 function fire(e) {
 	new Bullet(player.pos[0]+player.cameraFront[0], player.pos[1]+player.cameraFront[1], player.pos[2]+player.cameraFront[2],
 		0.5, 10, player.cameraFront, models.basicbullet);
+	if (invRenderer) {
+		invRenderer.selectItem(e.clientX, e.clientY);
+	}
 }
 
 function startGame() {
 	player = new Player();
+	invRenderer = new InvRenderer(oCtx, player.stuff, canvas.width * 0.05, canvas.height * 0.05,
+		10, 5);
 	canvas.onclick = fire;
 	playerName = document.getElementById("nameBox").value;
 	oCtx.fillText("Loading...", 100, 100);
@@ -123,8 +129,8 @@ function startGame() {
 	canvas.requestPointerLock();
 	new Zombie(10,10,0, 2,2,2, animators.zombie, 0.05, 10, 100);
 }
-var deadSong = new Audio("/static/zombiegame4/songs/pressure.mp3");
-deadSong.currentTime = 40.37;
+// var deadSong = new Audio("/static/zombiegame4/songs/pressure.mp3");
+// deadSong.currentTime = 40.37;
 function ded(reason) {
 	document.getElementById("deadDiv").style.display = "block";
 	document.getElementById("deadReason").innerHTML = reason;
@@ -336,7 +342,7 @@ function gameLoop(_t) {
 		oCtx.fillText(prop + ": " + renderStuff[prop], oW*0.71, oH*0.68 + offset);
 		offset += 45;
 	}
-	{ // inv
+	{ // tools inv
 		processNumKeys();
 		let ratio = oTex.inv.height / oTex.inv.width;
 		let width = oW * 0.4;
@@ -352,6 +358,9 @@ function gameLoop(_t) {
 			oCtx.font = "30px Calibri";
 			oCtx.fillText(player.selected.name, left + squareWidth * 2, top + 25);
 		}
+
+		// big inv
+		if (showInv) {invRenderer.render(0, 0);}
 	}
 	// crosshair
 	oCtx.fillStyle = "rgb(0,0,0)";

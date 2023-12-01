@@ -181,7 +181,9 @@ function shaderAddData(datas, shader) { // add data to any shader
 	for (var prop in datas) {dKey = prop; break;}
 	for (var prop in d) {
 		if (prop in datas) {
-			d[prop] = d[prop].concat(datas[prop]);
+			for (var i=0; i<datas[prop].length; i++) {
+				d[prop].push(datas[prop][i]);
+			}
 		} else {
 			console.warn("shaderAddData: " + prop + " was not specified. Filling buffer with 0.");
 			d[prop] = d[prop].concat(mList([0], buffers_d[shader].buffer[prop][1] *
@@ -402,7 +404,9 @@ function updateParticles(particles, dt=40) { // to render all particles and dele
 function mList(list, n) {
 	// multiply an array
 	var res = [];
-	for (let i=0; i<n; i++) {res=res.concat(list);}
+	for (var i=0; i<list.length*n; i++) {
+		res.push(list[i % list.length]);
+	}
 	return res;
 }
 
@@ -576,9 +580,13 @@ function debugLine(pos1, pos2, color = [1,0,0,1]) {
 
 function loadObj(url, mtlUrl, callback) {
 	var res = {"position":[], "normal":[], "color": [], "texCoord": []};
-	request(url+"?rand="+Math.random(), function(txt) { // jimmy rigged but it works
+	var rnd = Math.random();
+	// rnd = 1;
+	request(url+"?rand="+rnd, function(txt) { // jimmy rigged but it works
 		var data = parseOBJ(txt);
-		request(mtlUrl+"?rand="+Math.random(), function(mats) {
+		var rnd = Math.random();
+		// rnd = 1;
+		request(mtlUrl+"?rand="+rnd, function(mats) {
 			var materials = parseMTL(mats);
 			for (const geom of data.geometries) {
 				res.position = res.position.concat(geom.data.position);

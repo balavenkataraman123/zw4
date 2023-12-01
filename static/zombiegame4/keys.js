@@ -22,6 +22,9 @@ function onKeyDown(event) {
 		if (keyCode == "Digit6") {
 			showDebug = !showDebug;
 		}
+		if (keyCode == "KeyE") {
+			showInv = !showInv;
+		}
 	}
 }
 function onKeyUp(event) {
@@ -36,3 +39,5 @@ function processArrowKeys() {
 	if (divisDownKeys["ArrowLeft"]) {onCameraTurn({movementX: -arrowKeySensitivity, movementY: 0});}
 	if (divisDownKeys["ArrowRight"]) {onCameraTurn({movementX: arrowKeySensitivity, movementY: 0});}
 }
+
+setInterval(processArrowKeys, 20);

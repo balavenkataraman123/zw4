@@ -1,4 +1,6 @@
 function divisionOnLoad() {}
+var allStart = Date.now();
+
 initGL("canvas");
 
 class AnimationRenderer {
@@ -120,6 +122,7 @@ function chk() {
     if (good == false) {}
     if (good) {
         console.log("assets loaded in " + (Date.now() - loadStart));
+        console.log("everyting loaded in " + (Date.now() - allStart));
         dredy();
     }
 }

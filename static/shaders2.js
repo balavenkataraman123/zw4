@@ -1,5 +1,6 @@
 // we all love shaders eh?
 console.log("shaders loaded.");
+
 const vsSource = `
 attribute vec4 aVertexPosition;
 attribute vec4 aVertexColor;
