@@ -18,12 +18,13 @@ var zombies = [];
 var bullets = [];
 // aint no way you have found a wild physics engine
 class PhysicsObject {
-    constructor(x, y, z, dx, dy, dz, kin, add = true) {
+    constructor(x, y, z, dx, dy, dz, kin, trigger = false, add = true) {
         // very simple physics engine, assumes AABB with x, y, z are the MIDDLE
         // when doing non-AABB collision we assume that the point is at the bottom middle
         this.pos = [x, y, z];
         this.vel = [0, 0, 0];
         this.ignores = new Set();
+        this.trigger = trigger;
         this.dx = dx; this.dy = dy; this.dz = dz;
         this.kinematic = kin;
         this.removed = false;
@@ -47,6 +48,14 @@ class PhysicsObject {
     }
     onCollision(o) {}
     onBlanketCollision(o) {}
+    static checkCollision(pos1, pos2, w1, w2) { // pos1 and pos2 are the CENTER of the objects
+        // doesn't do anything, just checks
+        var colliding = 0;
+        for (let i=0; i<3; i++) {
+            if (Math.abs(pos1[i] - pos2[i]) < (w1[i] + w2[i])/2) {colliding += 1;}
+        }
+        return colliding == 3;
+    }
     static GlobalGravity = 0.01;
     static friction = 0.97; // inverse cuz multiply by friction
     static checkCollideAABB(a1, a2, dt) {
@@ -65,6 +74,9 @@ class PhysicsObject {
         ) {
             ret.colliding = true;
             a1.onCollision(a2); a2.onCollision(a1);
+            if (a1.trigger || a2.trigger) {
+                return true;
+            }
             var m = Math.max(xdist, ydist, zdist);
             if (a2.kinematic) {
                 if (m == xdist) {
@@ -131,6 +143,9 @@ class BlanketObject {
             } else {
                 ret.suggestedPos[1] = height - aabb.dy/2;
             }
+            if (aabb.trigger) {
+                ret.suggestedPos = aabb.pos;
+            }
         }
         return ret;
     }
@@ -146,11 +161,13 @@ class Player extends PhysicsObject {
         this.health = 100;
         this.maxHealth = 100;
         this.speed = 1;
-        this.invSelect = 0;
+        this.tSelect = 0;
         this.avgPos = [0, 10, 0];
-        this.inv = [{name: "GL Gun", model: models.glgun}, false, false, false, false];
-        this.selected = this.inv[0];
+        this.towers = [false, false, false, false, false, false];
+        this.toolbar = [new RandoAxe(), false, false, false, false];
+        this.selected = this.toolbar[0];
         this.iframe = false;
+        this.firingDelay = 0;
         this.stuff = {"Wood": 0, "rocc": 0, "Distilled Water": 0};
     }
     takeDamage(damage) {
@@ -169,7 +186,7 @@ class Player extends PhysicsObject {
         }
     }
     update() {
-        this.selected = this.inv[this.invSelect]; // avoid typing so much
+        this.selected = this.toolbar[this.tSelect]; // avoid typing so much
         const latencyFactor = 0.03; // how much the avgPos lags behind the pos
         for (var i=0; i<3; i++) {
             this.avgPos[i] = this.avgPos[i] * (1-latencyFactor) + this.pos[i] * latencyFactor;
@@ -273,10 +290,10 @@ class Zombie extends PhysicsObject {
 }
 
 class Bullet extends PhysicsObject {
-    constructor(x, y, z, speed, damage, front, model, add = true) {
+    constructor(x, y, z, speed, damage, front, model, add = true, timer = 10000) {
         super(x, y, z, 0.5, 0.5, 0.5, false);
         this.speed = speed; this.damage = damage; this.front = [front[0], front[1], front[2]]; this.model = model;
-        this.timer = 10000;
+        this.timer = timer;
         if (add) {bullets.push(this);}
     }
     static address;

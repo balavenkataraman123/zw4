@@ -57,18 +57,25 @@ class AnimationRenderer {
 bindTexture(loadTexture("/static/zombiegame4/gltf/grass.png?rand_num="+Math.random()), 0);
 
 var models = {elmTree: false, glgun: false, basicbullet: false, rock1: false, rock2: false, rock3: false,
-    iron1: false, iron2: false, silicon: false};
+    iron1: false, iron2: false, silicon: false, nothing: false, homebase: false};
 var animators = {zombie: false};
 var oTex = {
 	"resource": "RESOURCE MONITOR.png",
 	"inv": "INVENTORY.png",
 	"invPointer": "invselect.png",
+    "grass": "grass.png",
+    "defenses": "DEFENSES.png",
 };
 
 var itemTexCoords = {
-    "Distilled Water": [0.875, 0.625],
-    "rocc": [0.75, 0.625],
-    "Wood": [0.625, 0.625]
+    "Distilled Water": [1792/TEXW, 1280/TEXH],
+    "rocc": [1536/TEXW, 1280/TEXH],
+    "Wood": [1280/TEXW, 1280/TEXH],
+    "Quartz": [1792/TEXW, 1024/TEXH],
+    "Iron Ore": [1536/TEXW, 1024/TEXH],
+    "Pig Iron": [1280/TEXW, 1024/TEXH],
+    "Monocrystalline Silicon": [1024/TEXW, 1024/TEXH],
+    "Cobalt-60": [1792/TEXW, 768/TEXH]
 };
 
 var objNames = {
@@ -80,7 +87,9 @@ var objNames = {
     rock3: "rock3",
     iron1: "iron1",
     iron2: "iron2",
-    silicon: "silicon"
+    silicon: "silicon",
+    nothing: "nothing",
+    homebase: "homebase",
 };
 
 function checker() {}

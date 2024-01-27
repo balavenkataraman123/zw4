@@ -10,7 +10,7 @@ var modelViewMatrix = glMatrix.mat4.create();
 glMatrix.mat4.translate(modelViewMatrix, modelViewMatrix, [0, 0, -5]);
 var projectionMatrix = glMatrix.mat4.create();
 glMatrix.mat4.perspective(projectionMatrix,
-	60 * Math.PI / 180, // fov
+	75 * Math.PI / 180, // fov
 	16/9, // aspect
 	0.1, // zNear
 	150.0 // zFar
@@ -596,6 +596,9 @@ function loadObj(url, mtlUrl, callback) {
 					mList(materials[geom.material].diffuseColor.concat([1.0]),geom.data.position.length/3))
 				// we don't use any of the mtl specs except for the diffuse color cuz yeah
 			}
+			for (var i=1; i<res.texCoord.length; i+=2) {
+				res.texCoord[i] = 1 - res.texCoord[i];
+			}
 			callback(res, url);
 
 		});
@@ -717,7 +720,11 @@ function parseOBJ(text) { // credits to webglfundamentals.org for this code cuz 
   };
 
   const keywordRE = /(\w*)(?: )*(.*)/;
-  const lines = text.split('\n');
+  var lineDelim = "\n";
+  if (text.search("\r") != -1) {
+	lineDelim = "\r\n";
+  }
+  const lines = text.split(lineDelim);
   for (let lineNo = 0; lineNo < lines.length; ++lineNo) {
     const line = lines[lineNo].trim();
     if (line === '' || line.startsWith('#')) {

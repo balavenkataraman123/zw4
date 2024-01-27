@@ -24,6 +24,8 @@ function onKeyDown(event) {
 		}
 		if (keyCode == "KeyE") {
 			showInv = !showInv;
+			if (showInv) {document.exitPointerLock();}
+			else {canvas.requestPointerLock();}
 		}
 	}
 }

@@ -3,6 +3,7 @@
 var canvas, player;
 var dirtPatches = [];
 var particles = [];
+var mousepos = [0, 0];
 var dirtOffset = 10000;
 var PHYSICSSTEPS = 3;
 const dist = 20;
@@ -76,10 +77,11 @@ var dredy = function() {
 	oW = overlay.width; oH = overlay.height;
 
 	canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-	overlay.onclick = function() {canvas.requestPointerLock();};
+	overlay.onclick = function() {if (!showInv) canvas.requestPointerLock();};
 	document.exitPointerLock = document.exitPointerLock ||
 						document.mozExitPointerLock;
 	canvas.addEventListener("mousemove", onCameraTurn);
+	overlay.addEventListener("mousemove", function(e) {mousepos = [e.clientX, e.clientY];});
 	canvas.addEventListener("mousedown", ()=>{mouseDown = true;});
 	canvas.addEventListener("mouseup", ()=>{mouseDown = false;});
 	canvas.addEventListener("wheel", e=>{
@@ -109,8 +111,12 @@ function gameHelp() {
 }
 
 function fire(e) {
-	new Bullet(player.pos[0]+player.cameraFront[0], player.pos[1]+player.cameraFront[1], player.pos[2]+player.cameraFront[2],
-		0.5, 10, player.cameraFront, models.basicbullet);
+	if (player.selected) {
+		player.selected.shoot();
+	}
+}
+
+function overlayClick(e) {
 	if (invRenderer) {
 		invRenderer.selectItem(e.clientX, e.clientY);
 	}
@@ -118,9 +124,10 @@ function fire(e) {
 
 function startGame() {
 	player = new Player();
-	invRenderer = new InvRenderer(oCtx, player.stuff, canvas.width * 0.05, canvas.height * 0.05,
+	invRenderer = new InvRenderer(oCtx, player.stuff, canvas.width * 0.05,
 		10, 5);
 	canvas.onclick = fire;
+	overlay.addEventListener("mousedown", overlayClick);
 	playerName = document.getElementById("nameBox").value;
 	oCtx.fillText("Loading...", 100, 100);
 	requestAnimationFrame(function(t) {firstTime = t;});
@@ -163,6 +170,7 @@ function physicsUpdate(dt) {
 }
 
 function onCameraTurn(e) {
+	mousepos = [e.clientX, e.clientY];
 	player.yaw   += e.movementX * 0.1;
 	player.pitch -= e.movementY * 0.1;
 	if (player.pitch > 89) { player.pitch = 89; }
@@ -177,20 +185,20 @@ function onCameraTurn(e) {
 function processNumKeys() {
 	for (var i=1; i<=5; i++) {
 		if (divisDownKeys["Digit"+i]) {
-			player.invSelect = i-1;
+			player.tSelect = i-1;
 		}
 	}
-	if (player.invSelect != lastInvSelect) {
+	if (player.tSelect != lastInvSelect) {
 		clearShaderData("overlayShader");
-		player.selected = player.inv[player.invSelect];
-		if (player.inv[player.invSelect]) {
+		player.selected = player.toolbar[player.tSelect];
+		if (player.toolbar[player.tSelect]) {
 			shaderAddData({
 				aBillboardPos: player.selected.model.position, aColor: player.selected.model.color
 			}, "overlayShader");
 			flush("overlayShader");
 		}
 	}
-	lastInvSelect = player.invSelect;
+	lastInvSelect = player.tSelect;
 }
 
 var lastTime = -1;
@@ -234,17 +242,18 @@ function gameLoop(_t) {
     var dt;
     if (lastTime == -1) {dt = 0; lastTime = _t;} else {dt = _t - lastTime; lastTime = _t;}
 	dt = Math.min(dt, 70);
+	if (player.selected) {player.selected.update(dt);}
     dt *= 0.1;
 	d_cameraPos[0] = player.pos[0]; d_cameraPos[1] = player.pos[1]; d_cameraPos[2] = player.pos[2];
 	var playerSpeed = 0.01 * player.speed;
 	if (divisDownKeys["Shift"]) {playerSpeed = 1000;}
-    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, playerSpeed * dt);
+    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, playerSpeed * 0.3);
     if(divisDownKeys["KeyA"]) { // a or <
 		var crossed = glMatrix.vec3.create();
 		var normalized = glMatrix.vec3.create();
 		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
 		glMatrix.vec3.normalize(normalized, crossed);
-        glMatrix.vec3.scale(normalized, normalized, playerSpeed * dt);
+        glMatrix.vec3.scale(normalized, normalized, playerSpeed * 0.4);
 		glMatrix.vec3.subtract(player.vel,
 			player.vel,
 			normalized);
@@ -254,7 +263,7 @@ function gameLoop(_t) {
 		var normalized = glMatrix.vec3.create();
 		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
 		glMatrix.vec3.normalize(normalized, crossed);
-        glMatrix.vec3.scale(normalized, normalized, playerSpeed * dt);
+        glMatrix.vec3.scale(normalized, normalized, playerSpeed * 0.4);
 		glMatrix.vec3.add(player.vel,
 			player.vel,
 			normalized);
@@ -272,7 +281,7 @@ function gameLoop(_t) {
 	if (divisDownKeys["Space"]) {
 		player.vel[1] += dt * player.jumpPower;
 	}
-    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, 1/playerSpeed/dt);
+    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, 1/playerSpeed/0.3);
     var posPlusFront = glMatrix.vec3.create();
     glMatrix.vec3.add(posPlusFront, [player.pos[0], player.pos[1] + 1, player.pos[2]], player.cameraFront);
     glMatrix.mat4.lookAt(modelViewMatrix,
@@ -349,18 +358,57 @@ function gameLoop(_t) {
 		let height = width * ratio;
 		let left = oW * 0.5 - width/2;
 		let top = oH * 0.85 - height/2;
-		let squareWidth = 174/oTex.inv.width * width;
+		let squareWidth = 0.127 * width;
 		
 		oCtx.drawImage(oTex.inv, left, top, width, height);
-		oCtx.drawImage(oTex.invPointer, left + 33/oTex.inv.width * width + squareWidth * player.invSelect - oTex.invPointer.width/4,
-			top - oH * 0.1);
 		if (player.selected) {
 			oCtx.font = "30px Calibri";
 			oCtx.fillText(player.selected.name, left + squareWidth * 2, top + 25);
 		}
+		offset = left + width * 0.044;
+		for (var i=0; i<5; i++) {
+			// offset, top + height * 0.485, squareWidth, squareWidth
+			if (player.toolbar[i]) {
+				oCtx.drawImage(oTex.grass, player.toolbar[i].texCoordStart[0]*TEXW, player.toolbar[i].texCoordStart[1]*TEXH,
+					player.toolbar[i].texCoordWidth[0]*TEXW, player.toolbar[i].texCoordWidth[1]*TEXH,
+					offset, top + height * 0.485, squareWidth, squareWidth);
+			}
+			if (player.tSelect == i) {
+				oCtx.drawImage(oTex.invPointer, offset - 0.02 * oW, top - 0.1 * oH);
+			}
+			offset += 0.192 * width;
+		}
+
+		if (player.selected?.firingDelay > 0 && player.selected?.specs?.delay) {
+			oCtx.strokeStyle = "#000000";
+			oCtx.strokeRect(oW*0.3, top-oH * 0.1, oW*0.4, oH*0.03);
+			oCtx.fillStyle = "#00AAAA";
+			oCtx.fillRect(oW*0.3, top-oH * 0.1, oW * 0.4 * (Math.max(0, player.selected.firingDelay/player.selected.specs.delay)), oH*0.03);
+		}
+
+		ratio = oTex.defenses.height / oTex.defenses.width;
+		width = oW * 0.2;
+		height = width * ratio;
+		left = oW * 0.03;
+		top = oH * 0.8 - height/2;
+		squareWidth = 0.29 * width;
+		oCtx.drawImage(oTex.defenses, left, top, width, height);
+		let coords = [
+			[6/width, 65/height],
+			[90/width, 65/height],
+			[175/width, 65/height],
+			[5/width, 151/height],
+			[90/width, 151/height],
+			[175/width, 151/height]
+		];
+		for (var i=0; i<6; i++) {
+			if (player.towers[i]) {
+				// oCtx.drawImage()
+			}
+		}
 
 		// big inv
-		if (showInv) {invRenderer.render(0, 0);}
+		if (showInv) {invRenderer.render(200, 100);}
 	}
 	// crosshair
 	oCtx.fillStyle = "rgb(0,0,0)";

@@ -1,3 +1,19 @@
+function transformPositions(arr, x, y, z) {
+    var ret = [];
+    for (var i=0; i<arr.length; i++) {
+        if (i % 3 == 0) {
+            ret.push(arr[i]+x);
+        }
+        if (i % 3 == 1) {
+            ret.push(arr[i]+y);
+        }
+        if (i % 3 == 2) {
+            ret.push(arr[i]+z);
+        }
+    }
+    return ret;
+}
+
 class TerrainRandom {
     static state = 0;
     static setSeed(s) {
@@ -47,16 +63,17 @@ class Block {
             glMatrix.vec3.normalize(n, n);
 			this["n"+i] = [n[0], n[1], n[2]];
 		}
-		var px = 256/TEXW; var py = 256/TEXH;
-		var dx = 1536/TEXW; var dy = 1536/TEXH;
+		var px = 255/TEXW; var py = 255/TEXH;
+		var dx = 1535/TEXW; var dy = 1535/TEXH;
+        var zero = 1/TEXW; var one = 1-1/TEXW;
         shaderAddData({
             "aVertexPosition": this.pos1.concat(this.pos2.concat(this.pos3.concat(this.pos2.concat(this.pos3.concat(this.pos4))))),
             "aVertexNormal": this.n1.concat(this.n2.concat(this.n3.concat(this.n2.concat(this.n3.concat(this.n4))))),
 			// "aVertexNormal": mList([1], 36),
-            "aTexCoord1": mList([0, py, px, py, 0, 0, px, py, 0, 0, px, 0], 4),
-			"aTexCoord2": mList([dx, 1, 1, 1, dx, dy, 1, 1, dx, dy, 1, dy], 4),
-			"aTexCoord3": mList([dx, 1, 1, 1, dx, dy, 1, 1, dx, dy, 1, dy], 4),
-			"aTexCoord4": mList([0, py, px, py, 0, 0, px, py, 0, 0, px, 0], 4),
+            "aTexCoord1": mList([zero, py, px, py, zero, zero, px, py, zero, zero, px, zero], 4),
+			"aTexCoord2": mList([dx, one, one, one, dx, dy, one, one, dx, dy, one, dy], 4),
+			"aTexCoord3": mList([dx, one, one, one, dx, dy, one, one, dx, dy, one, dy], 4),
+			"aTexCoord4": mList([zero, py, px, py, zero, zero, px, py, zero, zero, px, zero], 4),
 			"aMixFactor": mList([1, dirtSimplex(x+dirtOffset, y+dirtOffset), 0.25, 0.25], 6)
         }, "t4shader");
     }
@@ -119,15 +136,16 @@ class TallGrass {
 
 class ElmTree extends PhysicsObject {
     constructor(x, y, z, add = true) {
-        super(x, y+3, z, 0.5, 5, 0.5, true);
+        super(x, y+2, z, 0.5, 3, 0.5, true);
         this.x = x; this.y = y; this.z = z;
         this.lastharvested = Date.now();
         if (!add) {return;}
+
         shaderAddData({
-            aVertexPosition: models.elmTree.position, aVertexNormal: models.elmTree.normal, aColor: models.elmTree.color,
-            aYRot: mList([Math.random()], models.elmTree.position.length/3), aTranslation: mList([x, y, z], models.elmTree.position.length/3)
-        }, "transformShader");
-        flush("transformShader");
+            aVertexPosition: transformPositions(models.elmTree.position, x, y, z), aVertexNormal: models.elmTree.normal,
+            aTexCoord: models.elmTree.texCoord
+        }, "shaderProgram");
+        flush("shaderProgram");
     }
     onCollision(o) {
         var idx = bullets.find(function(a) {return a == o;});
@@ -143,7 +161,7 @@ class ElmTree extends PhysicsObject {
                 aux.play();
 
                 if (Math.random() < 0.1) { // no more wood for 60s (actually 61)
-                    this.lastharvested = Date.now()+60000;
+                    this.lastharvested = Date.now()+6000;
                     TerrainGen.cooldownParticles([this.x, this.y+1, this.z]);
                 }
             }
@@ -160,18 +178,18 @@ class Rock extends PhysicsObject {
         this.type = type;
         this.lastharvested = Date.now();
         if (!add) {return;}
+
         shaderAddData({
-            aVertexPosition: models[type].position, aVertexNormal: models[type].normal, aColor: models[type].color,
-            aYRot: mList([Math.random()*2*Math.PI], models[type].position.length/3), aTranslation: mList([x, y, z], models[type].position.length/3)
-        }, "transformShader");
-        flush("transformShader");
+            aVertexPosition: transformPositions(models[type].position, x, y, z), aVertexNormal: models[type].normal,
+            aTexCoord: models[type].texCoord
+        }, "shaderProgram");
+        flush("shaderProgram");
     }
     onCollision(o) {
         var idx = bullets.find(function(a) {return a == o;});
         if (idx !== undefined) {
             if (Date.now() > this.lastharvested + 1000 && Math.random() < 0.3) {
-                new Item([this.x + Math.random()*5, this.y + Math.random() * 5, this.z + Math.random() * 10], "rocc",
-                    itemTexCoords.rocc, [0.125, 0.125]);
+                this.dropItems();
                 this.lastharvested = Date.now();
                 var name;
                 if (Math.random() < 0.5) {name = "rock1";} else {name = "rock2";}
@@ -186,6 +204,23 @@ class Rock extends PhysicsObject {
             }
             o.removed = true;
             TerrainGen.hitparticles([this.x, this.y+1, this.z]);
+        }
+    }
+    dropItems() {
+        var it;
+        if (this.type.startsWith("rock")) {
+            it = "rocc";
+        } else if (this.type.startsWith("iron")) {
+            it = "Iron Ore";
+        } else if (this.type.startsWith("silicon")) {
+            it = "Quartz";
+            console.log("silicon");
+        }
+        new Item([this.x, this.y + 3, this.z], it,
+            itemTexCoords[it], [0.125, 0.125]);
+        if (Math.random() < 0.1) {
+            new Item([this.x, this.y + 3, this.z], "Cobalt-60",
+                itemTexCoords["Cobalt-60"], [0.125, 0.125]);
         }
     }
 }

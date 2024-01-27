@@ -140,7 +140,7 @@ varying highp vec3 vLighting;
 void main() {
 	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
 	texCoord = aTexCoord;
-	fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 1.0;
+	fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 0.3;
 	highp float directional = max(dot(aVertexNormal, uLightingInfo[0]), 0.0);
 	vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
 	float as = dot(aVertexNormal.xyz, vec3(1.0,0.0,0.0));
@@ -203,7 +203,7 @@ void main() {
 	transformed.xyz += aTranslation;
 	gl_Position = uProjectionMatrix * uModelViewMatrix * transformed;
 
-	mediump float fogAmount = -(uModelViewMatrix * transformed).z * 0.05 - 1.0;
+	mediump float fogAmount = -(uModelViewMatrix * transformed).z * 0.05 - 0.3;
 	highp vec4 transformedNormal = rotate(vec4(aVertexNormal.xyz, 1.0), aYRot);
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
 	highp vec3 vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
