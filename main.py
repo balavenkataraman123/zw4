@@ -19,7 +19,9 @@ def index():
 
 @app.route("/b4/<arg>")
 def zw(arg):
-    return render_template("zombiewars4.html", rnd = random.randint(0, 1000))
+    return render_template("worldgentest.html", rnd = random.randint(0, 1000))
+
+# NOTE: the main zombiewars is hosted on a static server, and not this main.py stuff
 
 @app.route("/ll/<arg>")
 def ll(arg):

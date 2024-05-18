@@ -386,18 +386,23 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 }
 
 function updateParticles(particles, dt=40) { // to render all particles and delete old ones
+	var needUpdate = false;
+	particles = particles.filter((p)=>!p.removed);
 	for (let i=0; i<particles.length; i++) {
 		particles[i].render();
 		particles[i].timer -= dt;
 		if (particles[i].timer < 0) {
-			particles.splice(i, 1);
-			(async () => {
-				clearShaderData("particleShader");
-				for (let j=0; j<particles.length; j++) {
-					shaderAddData(particles[i], "particleShader");
-				}
-			})();
+			particles[i].removed = true;
+			needUpdate = true;
 		}
+	}
+	if (needUpdate) {
+		(async () => {
+			clearShaderData("particleShader");
+			for (let j=0; j<particles.length; j++) {
+				shaderAddData(particles[j], "particleShader");
+			}
+		})();
 	}
 }
 
@@ -605,6 +610,67 @@ function loadObj(url, mtlUrl, callback) {
 	});
 }
 
+function loadObj_fromCache(url, mtlUrl, cache, callback) {
+	console.log("reading " + url + " from cache, result starts with " + cache[url][0]);
+	var res = {"position":[], "normal":[], "color": [], "texCoord": []};
+	var txt = cache[url];
+	var data = parseOBJ(txt);
+	var mats = cache[mtlUrl];
+	var materials = parseMTL(mats);
+	for (const geom of data.geometries) {
+		res.position = res.position.concat(geom.data.position);
+		res.normal = res.normal.concat(geom.data.normal);
+		res.texCoord = res.texCoord.concat(geom.data.texcoord);
+		res.color = res.color.concat(
+			mList(materials[geom.material].diffuseColor.concat([1.0]),geom.data.position.length/3))
+		// we don't use any of the mtl specs except for the diffuse color cuz yeah
+	}
+	for (var i=1; i<res.texCoord.length; i+=2) {
+		res.texCoord[i] = 1 - res.texCoord[i];
+	}
+	callback(res, url);
+}
+
+// helper for loadObjAndHitbox
+function avg(a, b) {return (a + b) / 2;}
+
+function loadObjAndHitbox(url, mtlUrl, callback) {
+	var res = {"position":[], "normal":[], "hitboxes": []};
+	// res.hitboxes: array of arrays. Each nested array has these values:
+	// [x, y, z], [l, w, h]
+	// no mtl file loaded!
+	request(url, function(txt) { // jimmy rigged but it works
+		var data = parseOBJ(txt);
+		for (const geom of data.geometries) {
+			res.position = res.position.concat(geom.data.position);
+			res.normal = res.normal.concat(geom.data.normal);
+			// pulled from division 2
+
+			// turn the geometries into hitboxes
+			// WARNING: only works with axis-aligned rectangular prisms (i think)
+			// algo for creating hitboxes: first find the min and max x, y, z coords
+			// difference of coords between those is the width and height
+			// midpoint between those is the middle
+			// also this is pretty slow but its the best algo i can think of
+			var mins = [Infinity, Infinity, Infinity];
+			var maxs = [-Infinity, -Infinity, -Infinity];
+			var p = geom.data.position;
+			for (let i=0; i<p.length; i+=3) {
+				[p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
+					mins[ind] = Math.min(mins[ind], el);
+					maxs[ind] = Math.max(maxs[ind], el);
+				})
+			}
+			var toPush = [];
+			toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
+			toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+			toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
+			res.hitboxes.push(toPush);
+		}
+		callback(res);
+	});
+}
+
 function parseOBJ(text) { // credits to webglfundamentals.org for this code cuz im too small brain
 						  // i should make my own sometime w/indexing tho
   // because indices are base 1 let's just fill in the 0th data
@@ -802,9 +868,13 @@ function parseMTL(text) { // I wrote this mtl parser myself but it kinda sux
 	return materials;
 }
 
-function loadAnimation(url, mtlUrl, numFrames, callback, debug = false) {
+function loadAnimation(url, mtlUrl, name, numFrames, callback, debug = false) {
+	// loads from a .anim file
+	// name is the actual name (like "walk") that was in the .anim file
+	// url is like ./static/whatever/walk
 	function dO(a) {if (debug) {console.log(a);}}
-	(async function() {
+	request(url+".anim", function(cache) {
+		cache = JSON.parse(cache);
 		dO("loading animation");
 		var ret = new Array(numFrames+1); ret[0] = "OMFG THIS TOOK ME SO LONG JAVASCRIPT ASYNC IS SO BAD ISTG UR MOM";
 		for (var i=1; i<=numFrames; i++) {
@@ -813,7 +883,7 @@ function loadAnimation(url, mtlUrl, numFrames, callback, debug = false) {
 				s += "0";
 			}
 			s += i.toString();
-			loadObj(url+s+".obj", mtlUrl+s+".mtl", function(a, b) {
+			loadObj_fromCache(name+"_"+s+".obj", name+"_"+s+".mtl", cache, function(a, b) {
 				var cl = parseInt(b.slice(b.length-9));
 				dO("res received");ret[cl] = a;
 				var good = true;
@@ -833,5 +903,5 @@ function loadAnimation(url, mtlUrl, numFrames, callback, debug = false) {
 			if (good) {dO("animation load successful");break;}
 			if (Date.now() - start > 5000) {dO("failed loading animation"); return;}
 		}*/
-	})();
+	});
 }

@@ -228,6 +228,9 @@ void main() {
 	col = vec4(col.rgb * vLighting, col.a);
 	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
 	gl_FragColor = col;
+	if (col.a == 0.0) {
+		discard;
+	}
 }
 `
 
