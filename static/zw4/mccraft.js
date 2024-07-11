@@ -1,51 +1,16 @@
 // proudly created by Major League Game Development (i.e myself)
 
 var canvas, player;
-var dirtPatches = [];
-var particles = [];
 var mousepos = [0, 0];
-var dirtOffset = 10000;
-var PHYSICSSTEPS = 3;
-const dist = 64;
-var invRenderer = false;
-var running = true;
-var normalRef = [null, ["pos3","pos2"], ["pos1","pos4"], ["pos4","pos1"], ["pos2","pos3"]];
-var debugDispNow = {"hitboxes shown": false};
-var skyColors = [ // each one lasts for around 1/8 of a day
-[0.529, 0.807, 0.921], // sky blue: morning
-[0.784, 0.976, 0.98], // a bit lighter: noon
-[0.529, 0.807, 0.921], // sky blue: afternoon
-[0.98, 0.513, 0.078], // orange: sunset
-[0.1, 0.15, 0.2], // dusk
-[0.01, 0.07, 0.1], // midnight
-[0.337/4, 0.482/4, 0.749/4], // dawn
-[0.968, 0.105, 0.278], // sunrise
-[0.529, 0.807, 0.921] // morning again
-];
-var lastInvSelect = 10;
+var debugDispNow = {}; var showDebug = true;
 var firstTime = 0;
-var audios = {
-	"pop": "/static/worldgentest/gltf/sfx/pop.mp3",
-	"tree": "/static/worldgentest/gltf/sfx/tree.mp3",
-	"tree2": "/static/worldgentest/gltf/sfx/tree2.mp3",
-	"rock1": "/static/worldgentest/gltf/sfx/rockbullet1.mp3",
-	"rock2": "/static/worldgentest/gltf/sfx/rockbullet2.mp3",
-	"rock2": "/static/worldgentest/gltf/sfx/rockbullet3.mp3",
-};
 var oW, oH;
-var readyState = 69; // legacy for compatibility, actually has no function
+var globalSkybox;
 
 function vec3_avg(a, b, c, d) {return [(a[0]+b[0]+c[0]+d[0])/2, (a[1]+b[1]+c[1]+d[1])/2, (a[2]+b[2]+c[2]+d[2])/2];}
 function vec3_cross(a, b) {
-	var out = [0,0,0]; glMatrix.vec3.cross(out, a, b);
+	var out = glMatrix.vec3.create(); glMatrix.vec3.cross(out, a, b);
 	glMatrix.vec3.normalize(out, out); return out;}
-function ns2(a, b) {
-	return noise.simplex2(a/10, b/10) * noise.simplex2(a/50, b/50)* noise.simplex2(a/50+1423, b/50+100007)*9 +
-	noise.simplex2(a*1.5, b*1.5) * noise.simplex2(a/10+100, b/10-69);
-}; // for easier typing
-function dirtSimplex(a, b) {
-	return noise.simplex2(a/10+dirtOffset, b/10+dirtOffset);
-}
 
 function debugUpdate() {
 	var res = "<strong>Debug Display</strong><br>";
@@ -61,13 +26,10 @@ function debugUpdate() {
 setInterval(debugUpdate, 20);
 
 
-var dredy = function() {
+var assetsReady = function() {
 	console.log("all things loaded");
-	clearInterval(chkHandle);
 	document.getElementById("startBtn").innerHTML = "Start!";
-	noise.seed(TerrainGen.seed);
-	Item.init();
-	Bullet.init();
+	noise.seed(6969);
 	// size the canvas
 	canvas.width = window.innerWidth;
 	canvas.height = window.innerHeight;
@@ -82,7 +44,7 @@ var dredy = function() {
 	oW = overlay.width; oH = overlay.height;
 
 	canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-	overlay.onclick = function() {if (!showInv) canvas.requestPointerLock();};
+	overlay.onclick = function() {canvas.requestPointerLock();};
 	document.exitPointerLock = document.exitPointerLock ||
 						document.mozExitPointerLock;
 	canvas.addEventListener("mousemove", onCameraTurn);
@@ -99,15 +61,7 @@ var dredy = function() {
 			else if (player.inv[player.selected - 1]) {player.selected -= 1;}
 		}
 	});
-
-	TerrainGen.init();
-	TerrainGen.generate(dist);
-	flushUniforms();
-	flush("billboardShader");
-	flush("t4shader");
 	gl.enable(gl.DEPTH_TEST);
-
-	readyState++;
 }
 
 function gameHelp() {
@@ -115,140 +69,32 @@ function gameHelp() {
 	document.getElementById("helpBtn").innerHTML = "How to Play (scroll down)";
 }
 
-function fire(e) {
-	if (player.selected) {
-		player.selected.shoot();
-	}
-}
-
-function overlayClick(e) {
-	if (invRenderer) {
-		invRenderer.selectItem(e.clientX, e.clientY);
-	}
-}
-
 function startGame() {
 	player = new Player();
-	invRenderer = new InvRenderer(oCtx, player.stuff, canvas.width * 0.05,
-		10, 5);
-	canvas.onclick = fire;
-	overlay.addEventListener("mousedown", overlayClick);
 	playerName = document.getElementById("nameBox").value;
+	Gun.init();
+	Bullet.init();
 	oCtx.fillText("Loading...", 100, 100);
 	requestAnimationFrame(function(t) {firstTime = t;});
     requestAnimationFrame(gameLoop);
     document.getElementById("homeDiv").style.display = "none";
 	canvas.requestPointerLock();
-	new Zombie(10,10,0, 2,2,2, animators.zombie, 0.05, 10, 100);
-	setInterval(regenerateKinematics, 1000);
+	IHP.debugLine = debugLine;
+
+	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
+	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
+
+	for (var i=0; i<10; i++) {
+		new Zombie(40, 10, (i-5) * 3, "Awajiba", new AwajibaPathfinder(40, 10, (i-5)*3));
+	}
 }
-// var deadSong = new Audio("/static/worldgentest/songs/pressure.mp3");
-// deadSong.currentTime = 40.37;
+var deadSong = new Audio("/static/worldgentest/songs/pressure.mp3");
+deadSong.currentTime = 40.37;
 function ded(reason) {
 	document.getElementById("deadDiv").style.display = "block";
 	document.getElementById("deadReason").innerHTML = reason;
 	running = false;
 	deadSong.play();
-}
-
-function regenerateKinematics() {
-	physicsCloseTo_kin.clear();
-	var i = -1;
-	for (var p of physicsObjects) {
-		i++;
-		if (!p.kinematic) continue;
-		var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
-		var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
-		var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
-		var x1 = xmin - xmin % SECTORSIZE, x2 = xmax - xmax % SECTORSIZE + SECTORSIZE;
-		var y1 = ymin - ymin % SECTORSIZE, y2 = ymax - ymax % SECTORSIZE + SECTORSIZE;
-		var z1 = zmin - zmin % SECTORSIZE, z2 = zmax - zmax % SECTORSIZE + SECTORSIZE;
-		for (var x=x1; x<=x2; x+=SECTORSIZE) {
-			for (var y=y1; y<=y2; y+=SECTORSIZE) {
-				for (var z=z1; z<=z2; z+=SECTORSIZE) {
-					if (physicsCloseTo_kin.has(x+","+y+","+z)) {
-						physicsCloseTo_kin.get(x+","+y+","+z).push(i);
-					} else {
-						physicsCloseTo_kin.set(x+","+y+","+z, [i]);
-					}
-				}
-			}
-		}
-	}
-}
-
-function physicsUpdate(dt) {
-	physicsObjects = physicsObjects.filter((p)=>!p.removed);
-	if (lastPOsize != physicsObjects.length) {
-		regenerateKinematics();
-		lastPOsize = physicsObjects.length;
-	}
-	physicsCloseTo.clear();
-	var i = -1;
-	for (var p of physicsObjects) {
-		i++;
-		if (p.kinematic) continue;
-		var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
-		var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
-		var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
-		var x1 = xmin - xmin % SECTORSIZE, x2 = xmax - xmax % SECTORSIZE + SECTORSIZE;
-		var y1 = ymin - ymin % SECTORSIZE, y2 = ymax - ymax % SECTORSIZE + SECTORSIZE;
-		var z1 = zmin - zmin % SECTORSIZE, z2 = zmax - zmax % SECTORSIZE + SECTORSIZE;
-		for (var x=x1; x<=x2; x+=SECTORSIZE) {
-			for (var y=y1; y<=y2; y+=SECTORSIZE) {
-				for (var z=z1; z<=z2; z+=SECTORSIZE) {
-					if (physicsCloseTo.has(x+","+y+","+z)) {
-						physicsCloseTo.get(x+","+y+","+z).push(i);
-					} else {
-						physicsCloseTo.set(x+","+y+","+z, [i]);
-					}
-				}
-			}
-		}
-	}
-	for (var blanket of blanketObjects) {
-		for (var po of physicsObjects) {
-			po.vel[1] -= PhysicsObject.GlobalGravity * dt;
-			po.vel[0] *= PhysicsObject.friction ** (1/PHYSICSSTEPS); po.vel[1] *= PhysicsObject.friction ** (1/PHYSICSSTEPS); po.vel[2] *= PhysicsObject.friction ** (1/PHYSICSSTEPS);
-			if (!po.kinematic) {
-				po.pos[0] += po.vel[0] * dt; po.pos[1] += po.vel[1] * dt; po.pos[2] += po.vel[2] * dt;
-			}
-			var res = BlanketObject.checkCollideAABB(blanket, po, dt);
-			if (res.colliding) {
-				if (!po.kinematic) {po.pos = res.suggestedPos};
-				po.vel[1] = 0;
-			}
-		}
-	}
-	for (var p of physicsObjects) {
-		if (p.kinematic) continue;
-		var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
-		var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
-		var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
-		var x1 = xmin - xmin % SECTORSIZE, x2 = xmax - xmax % SECTORSIZE + SECTORSIZE;
-		var y1 = ymin - ymin % SECTORSIZE, y2 = ymax - ymax % SECTORSIZE + SECTORSIZE;
-		var z1 = zmin - zmin % SECTORSIZE, z2 = zmax - zmax % SECTORSIZE + SECTORSIZE;
-		for (var x=x1; x<=x2; x+=SECTORSIZE) {
-			for (var y=y1; y<=y2; y+=SECTORSIZE) {
-				for (var z=z1; z<=z2; z+=SECTORSIZE) {
-					if (physicsCloseTo.has(x+","+y+","+z)) {
-						for (var p1 of physicsCloseTo.get(x+","+y+","+z)) {
-							if (physicsObjects[p1] != p) {
-								PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
-							}
-						}
-					}
-					if (physicsCloseTo_kin.has(x+","+y+","+z)) {
-						for (var p1 of physicsCloseTo_kin.get(x+","+y+","+z)) {
-							if (physicsObjects[p1] != p) {
-								PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 }
 
 function onCameraTurn(e) {
@@ -257,30 +103,6 @@ function onCameraTurn(e) {
 	player.pitch -= e.movementY * 0.1;
 	if (player.pitch > 89) { player.pitch = 89; }
 	if (player.pitch < -89) { player.pitch = -89; }
-
-	var front = glMatrix.vec3.create();
-	front[0] = Math.cos(glMatrix.glMatrix.toRadian(player.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(player.pitch));
-	front[1] = Math.sin(glMatrix.glMatrix.toRadian(player.pitch));
-	front[2] = Math.sin(glMatrix.glMatrix.toRadian(player.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(player.pitch))
-	glMatrix.vec3.normalize(player.cameraFront, front);
-}
-function processNumKeys() {
-	for (var i=1; i<=5; i++) {
-		if (divisDownKeys["Digit"+i]) {
-			player.tSelect = i-1;
-		}
-	}
-	if (player.tSelect != lastInvSelect) {
-		clearShaderData("overlayShader");
-		player.selected = player.toolbar[player.tSelect];
-		if (player.toolbar[player.tSelect]) {
-			shaderAddData({
-				aBillboardPos: player.selected.model.position, aColor: player.selected.model.color
-			}, "overlayShader");
-			flush("overlayShader");
-		}
-	}
-	lastInvSelect = player.tSelect;
 }
 
 var lastTime = -1;
@@ -292,207 +114,173 @@ function mix(a, b, amount) {
 
 var __frameNum = 0, __ptime = 0;
 
+function renderProgressCircle(msg, remaining, total) {
+	// renders a surviv-like progress circle
+	var dTheta = (1 - remaining / total) * 2 * Math.PI;
+	oCtx.strokeStyle = "white"; oCtx.lineWidth = 10;
+	oCtx.globalAlpha = 1;
+	oCtx.beginPath();
+	oCtx.arc(oW * 0.5, oH * 0.5, oW * 0.03, -Math.PI/2, -Math.PI/2 + dTheta);
+	oCtx.stroke();
+	oCtx.lineWidth = 2;
+	oCtx.fillStyle = "black";
+	oCtx.fillRect(oW * 0.45, oH * 0.6, oW * 0.1, oH * 0.05);
+	oCtx.font = (oH * 0.03) + "px Impact";
+	oCtx.textAlign = "center";
+	oCtx.fillStyle = "white";
+	oCtx.fillText(msg, oW * 0.5, oH * 0.635);
+}
+
 function gameLoop(_t) {
 	var _startTime = performance.now();
-	if (!running) {return;}
-	__frameNum++;
-	_t -= firstTime;
-	// color calcs
-	var m = _t % DAYLENGTH;
-	var dayNum = Math.floor(_t / DAYLENGTH);
-	var amount = (m % COLORLENGTH) / COLORLENGTH;
-	var ind = Math.floor(m/COLORLENGTH);
-	debugDispNow["day number"] = dayNum;
-	var color1 = skyColors[ind];
-	var color2 = skyColors[ind+1];
-	c = [mix(color1[0], color2[0], amount), mix(color1[1], color2[1], amount), mix(color1[2], color2[2], amount)];
-	gl.clearColor(c[0], c[1], c[2], 1.0);
-	globalFogColor = [...c, 1.0];
-	globalFogAmount = 1 - (m/DAYLENGTH+0.9)%1;
-	globalFogAmount *= 2.0;
-	if (globalFogAmount > 1) {globalFogAmount = 2 - globalFogAmount;}
-	globalFogAmount *= 5.0;
-	globalFogAmount = 0; // to make debugging easier;
-	debugDispNow["fog amt"] = globalFogAmount;
-	var adj = m - 1 * COLORLENGTH; // bc the sun position is a bit wank
-	var sunPosition = [Math.sin(adj / DAYLENGTH * 2 * Math.PI) * 50, Math.cos(adj / DAYLENGTH * 2 * Math.PI) * 30, 0];
-	lightingInfo[3] = c[0]; lightingInfo[4] = c[1]; lightingInfo[5] = c[2];
-	var normalizedSunPosition = glMatrix.vec3.create();
-	glMatrix.vec3.normalize(normalizedSunPosition, sunPosition);
-	glMatrix.vec3.multiply(normalizedSunPosition, normalizedSunPosition, [1.3, 1.3, 1.3]);
-	lightingInfo[0] = normalizedSunPosition[0]; lightingInfo[1] = normalizedSunPosition[1]; lightingInfo[2] = normalizedSunPosition[2];
+	if (lastTime == -1) {lastTime = _t;}
+	var dt = _t - lastTime;
+	lastTime = _t;
+	dt = Math.min(dt, 100);
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	oCtx.clearRect(0, 0, oW, oH);
+	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+	globalFogColor = glMatrix.vec4.fromValues(0, 0, 0, 0);
 
-	oCtx.clearRect(0, 0, overlay.width, overlay.height);
-	// player.pos[1] = ns2(player.pos[0], player.pos[2])+2;
-	debugDispNow["player pos"] = player.pos;
-    var dt;
-    if (lastTime == -1) {dt = 0; lastTime = _t;} else {dt = _t - lastTime; lastTime = _t;}
-	dt = Math.min(dt, 70);
-	if (player.selected) {player.selected.update(dt);}
-    dt *= 0.1;
-	d_cameraPos[0] = player.pos[0]; d_cameraPos[1] = player.pos[1]; d_cameraPos[2] = player.pos[2];
-	var playerSpeed = 0.01 * player.speed;
-	if (divisDownKeys["Shift"]) {playerSpeed = 1000;}
-    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, playerSpeed * 0.3);
-    if(divisDownKeys["KeyA"]) { // a or <
-		var crossed = glMatrix.vec3.create();
-		var normalized = glMatrix.vec3.create();
-		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
-		glMatrix.vec3.normalize(normalized, crossed);
-        glMatrix.vec3.scale(normalized, normalized, playerSpeed * 0.4);
-		glMatrix.vec3.subtract(player.vel,
-			player.vel,
-			normalized);
+	// movement
+	var scaledFront = glMatrix.vec3.create();
+	scaledFront[0] = player.cameraFront[0]; scaledFront[2] = player.cameraFront[2];
+	glMatrix.vec3.normalize(scaledFront, scaledFront);
+	glMatrix.vec3.scale(scaledFront, scaledFront, player.speed * dt/1000);
+	var right = glMatrix.vec3.create();
+	glMatrix.vec3.cross(right, scaledFront, player.cameraUp);
+	glMatrix.vec3.normalize(right, right);
+	glMatrix.vec3.scale(right, right, player.speed * dt/1000);
+
+	if (divisDownKeys["KeyW"]) {
+		glMatrix.vec3.add(player.pos, player.pos, scaledFront);
 	}
-	if(divisDownKeys["KeyD"]) { // d or >
-		var crossed = glMatrix.vec3.create();
-		var normalized = glMatrix.vec3.create();
-		glMatrix.vec3.cross(crossed, player.cameraFront, player.cameraUp);
-		glMatrix.vec3.normalize(normalized, crossed);
-        glMatrix.vec3.scale(normalized, normalized, playerSpeed * 0.4);
-		glMatrix.vec3.add(player.vel,
-			player.vel,
-			normalized);
+	if (divisDownKeys["KeyS"]) {
+		glMatrix.vec3.subtract(player.pos, player.pos, scaledFront);
 	}
-	if(divisDownKeys["KeyW"]) { // w or ^
-		glMatrix.vec3.add(player.vel,
-			player.cameraFront,
-			player.vel);
+	if (divisDownKeys["KeyA"]) {
+		glMatrix.vec3.subtract(player.pos, player.pos, right);
 	}
-	if(divisDownKeys["KeyS"]) { // s or down
-		glMatrix.vec3.subtract(player.vel,
-			player.vel,
-			player.cameraFront,);
+	if (divisDownKeys["KeyD"]) {
+		glMatrix.vec3.add(player.pos, player.pos, right);
 	}
-	if (divisDownKeys["Space"]) {
-		player.vel[1] += dt * player.jumpPower;
-	}
-    glMatrix.vec3.scale(player.cameraFront, player.cameraFront, 1/playerSpeed/0.3);
-    var posPlusFront = glMatrix.vec3.create();
-    glMatrix.vec3.add(posPlusFront, [player.pos[0], player.pos[1] + 1, player.pos[2]], player.cameraFront);
-    glMatrix.mat4.lookAt(modelViewMatrix,
-        [player.pos[0], player.pos[1] + 1, player.pos[2]],
-        posPlusFront,
-        glMatrix.vec3.fromValues(0, 1, 0));
-	var __t = performance.now();
-	for (var i=0; i<PHYSICSSTEPS; i++) {
-		physicsUpdate(dt/PHYSICSSTEPS);
-	}
-	__ptime += performance.now() - __t;
-	if (__frameNum == 120) {
-		// console.log("physics update took " + (__ptime / 120));
-		__frameNum = 0;
-		__ptime = 0;
+	if (divisDownKeys["Digit1"]) {player.invIndex = 0;}
+	if (divisDownKeys["Digit2"]) {player.invIndex = 1;}
+	if (divisDownKeys["Digit3"]) {player.invIndex = 2;}
+	if (divisDownKeys["Digit4"]) {player.invIndex = 3;}
+
+	// firing
+	if (player.selected.type == "gun") {
+		player.selected.update(dt, true);
+		if (mouseDown && player.selected.canShoot()) {
+			player.selected.recoil();
+			var scaledFront = glMatrix.vec3.create();
+			var distanceFromPlayer = player.selected.specs.barrelLength;
+			var spawnPos = glMatrix.vec3.create();
+			glMatrix.vec3.scale(scaledFront, player.cameraFront, distanceFromPlayer);
+			glMatrix.vec3.add(spawnPos, player.cameraPos, scaledFront);
+			Bullet.fireBullet(spawnPos, player.yaw, player.pitch,
+				player.selected.specs.spread, player.selected.specs.bulletColor,
+				player.selected.specs.bulletWidth, player.selected.specs.bulletLength,
+				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5);
+		}
 	}
 
-    flushUniforms();
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-	for (var prop in animators) {
-		animators[prop].frameNum = Math.floor(_t*1.33/50%30)+1;
-	}
-
-	// mob spawning
 	
-	/*var x = _t / DAYLENGTH;
-	if (Math.random() < 2*Math.abs(x - Math.floor(x + 0.5)) && Math.random() < 0.05) {
-		new Zombie(Math.random() * 10, 10, Math.random() * 10, 2,2,2, animators.zombie, 0.05 * Math.random(), 10 * Math.random()
-		, 10 + 100 * Math.random());
-	}*/
 
-	player.update();
-	Item.update();
+	// updates
+	IHP.physicsUpdate(dt, 16.666);
+	player.update(dt);
 	Bullet.update(dt);
-	updateParticles(particles, dt*10);
-	useShader("objShader");
-	animators.zombie.bindAttributes();
+	Item.update(dt);
 	Zombie.update(dt);
 
-    useShader("t4shader");
-    gl.drawArrays(gl.TRIANGLES, 0, buffers_d.t4shader.data.aVertexPosition.length/3);
-
-	useShader("billboardShader");
-	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.billboardShader.data.aCenterOffset.length/3);
-	gl.uniform1f(buffers_d.billboardShader.uniform.uAlphaAdj, 0.999);
-
-	useRenderBuffer(Item.address, "billboardShader");
-	gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Item.address, "billboardShader").aCorner.length/2);
-
-	gl.useProgram(buffers_d.transformShader.compiled);
-	useRenderBuffer(Bullet.address, "transformShader");
-	gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Bullet.address, "transformShader").aVertexPosition.length/3);
+	// rendering
+	flushUniforms();
+	globalSkybox.render(player.cameraFront, player.cameraUp);
 
 	useShader("shaderProgram");
 	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.shaderProgram.data.aVertexPosition.length/3);
-	for (var bu of TerrainGen.buildings) {
-		bu.render();
-	}
 
-	useShader("objShader");
-	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.objShader.data.aColor.length/4);
+	Bullet.renderAll();
+	Item.renderAll();
+	Zombie.renderAll();
 
-	useShader("transformShader");
-	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.transformShader.data.aVertexPosition.length/3);
+	player.selected.render(mouseDown);
 
-	useShader("overlayShader");
-	gl.drawArrays(gl.TRIANGLES, 0, buffers_d.overlayShader.data.aBillboardPos.length/3);
+	IHP.drawAllBoxes();
 
-	oCtx.font = "40px Calibri";
-	{ // tools inv
-		processNumKeys();
-		let ratio = oTex.inv.height / oTex.inv.width;
-		let width = oW * 0.4;
-		let height = width * ratio;
-		let left = oW * 0.5 - width/2;
-		let top = oH * 0.85 - height/2;
-		let squareWidth = 0.127 * width;
-		
-		oCtx.drawImage(oTex.inv, left, top, width, height);
-		if (player.selected) {
-			oCtx.font = "30px Calibri";
-			oCtx.fillText(player.selected.name, left + squareWidth * 2, top + 25);
-		}
-		offset = left + width * 0.044;
-		for (var i=0; i<5; i++) {
-			// offset, top + height * 0.485, squareWidth, squareWidth
-			if (player.toolbar[i]) {
-				oCtx.drawImage(oTex.grass, player.toolbar[i].texCoordStart[0]*TEXW, player.toolbar[i].texCoordStart[1]*TEXH,
-					player.toolbar[i].texCoordWidth[0]*TEXW, player.toolbar[i].texCoordWidth[1]*TEXH,
-					offset, top + height * 0.485, squareWidth, squareWidth);
-			}
-			if (player.tSelect == i) {
-				oCtx.drawImage(oTex.invPointer, offset - 0.02 * oW, top - 0.1 * oH);
-			}
-			offset += 0.192 * width;
-		}
-
-		if (player.selected?.firingDelay > 0 && player.selected?.specs?.delay) {
-			oCtx.strokeStyle = "#000000";
-			oCtx.strokeRect(oW*0.3, top-oH * 0.1, oW*0.4, oH*0.03);
-			oCtx.fillStyle = "#00AAAA";
-			oCtx.fillRect(oW*0.3, top-oH * 0.1, oW * 0.4 * (Math.max(0, player.selected.firingDelay/player.selected.specs.delay)), oH*0.03);
-		}
-
-		// big inv
-		if (showInv) {invRenderer.render(200, 100);}
-	}
+	// GUI
 	// crosshair
-	oCtx.fillStyle = "rgb(0,0,0)";
-	oCtx.strokeRect(oW*0.48, oH*0.48, oW*0.04, oH*0.04);
-	oCtx.fillRect(oW*0.495, oH*0.5-oW*0.005, oW*0.01, oW*0.01);
+	if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
+		oCtx.fillStyle = "black";
+		oCtx.fillRect(oW * 0.5 - 20, oH * 0.5 - 2, 40, 4);
+		oCtx.fillRect(oW * 0.5 - 2, oH * 0.5 - 20, 4, 40);
+	}
 
 	// health bar
-	oCtx.strokeRect(oW*0.3, oH*0.05, oW*0.4, oH*0.05);
-	oCtx.fillStyle = "rgb(" + mix(0, 255, 1-player.health/player.maxHealth) + "," + mix(0, 255, player.health/player.maxHealth) +
-		",25)";
-	oCtx.fillRect(oW*0.3, oH*0.05, oW*0.4*player.health/player.maxHealth, oH*0.05);
-	debugDispNow["player health"] = player.health;
+	oCtx.strokeStyle = "lime";
+	oCtx.strokeRect(oW * 0.3, oH * 0.9, oW * 0.4, oH * 0.05);
+	var healthRatio = player.health / player.maxHealth;
+	if (healthRatio == 1) oCtx.fillStyle = "grey";
+	else if (healthRatio > 0.7) oCtx.fillStyle = "lightgrey";
+	else if (healthRatio > 0.4) oCtx.fillStyle = "pink";
+	else if (healthRatio > 0.25) oCtx.fillStyle = "purple";
+	else oCtx.fillStyle = "red";
+	oCtx.fillRect(oW * 0.3, oH * 0.9, oW * 0.4 * healthRatio, oH * 0.05);
+	if (healthRatio <= 0) {
+		return;
+	}
 
-	if (debugDispNow["hitboxes shown"]) {
-		for (var i=1; i<physicsObjects.length; i++) {
-			physicsObjects[i].drawBox(!physicsObjects[i].kinematic?[0,1,0,1]:[1,0,0,1]);
+	// ammo remaining
+	if (player.selected.name != "empty") {
+		oCtx.fillStyle = "black";
+		oCtx.globalAlpha = 0.5;
+		oCtx.fillRect(oW * 0.46, oH * 0.8, oW * 0.08, oH * 0.07);
+		if (true) { // later, replace this with the ammo in the player's bag
+			oCtx.fillRect(oW * 0.55, oH * 0.82, oW * 0.05, oH * 0.05);
+		}
+		oCtx.globalAlpha = 1;
+		oCtx.textAlign = "center";
+		if (player.selected.roundsRemaining > 0) {
+			oCtx.fillStyle = "white";
+		} else {
+			oCtx.fillStyle = "red";
+		}
+		oCtx.font = "40px Impact";
+		oCtx.fillText(player.selected.roundsRemaining, oW * 0.5, oH * 0.85);
+		if (true) { // same here as ^^^
+			oCtx.font = "30px Impact";
+			oCtx.fillStyle = "white";
+			oCtx.fillText(100, oW * 0.575, oH * 0.86);
 		}
 	}
+
+	oCtx.fillStyle = "black";
+	oCtx.globalAlpha = 0.5;
+	// inventory
+	for (var i=0; i<4; i++) {
+		var y = i * oH * 0.1 + oH * 0.6;
+		oCtx.fillRect(oW * 0.85, y, oW * 0.14, oH * 0.09);
+	}
+	oCtx.fillStyle = "white";
+	oCtx.globalAlpha = 1;
+	oCtx.font = (oH * 0.03) + "px Impact";
+	oCtx.textAlign = "right";
+	for (var i=0; i<4; i++) {
+		var y = i * oH * 0.1 + oH * 0.6;
+		oCtx.fillText(player.inv[i].name, oW * 0.98, y + oH * 0.07);
+	}
+
+	// reloading
+	if (player.selected.type == "gun" && player.selected.reloadRemaining > 0) {
+		renderProgressCircle("Reloading", player.selected.reloadRemaining, player.selected.specs.reloadTime);
+	}
+
+	debugDispNow["hitboxes shown"] = IHP.drawLines;
+	debugDispNow["player yaw"] = player.yaw;
+	debugDispNow["player pitch"] = player.pitch;
+	
 	if (Math.random() < 0.01) {
 		debugDispNow["frame time"] = performance.now() - _startTime;
 	}

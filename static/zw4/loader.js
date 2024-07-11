@@ -1,5 +1,6 @@
 function divisionOnLoad() {}
 var allStart = Date.now();
+var texW = 2048, texH = 2048;
 
 initGL("canvas");
 
@@ -27,21 +28,33 @@ class AnimationRenderer {
         // assumes bindAttributes has already been called
         var old = glMatrix.mat4.create();
         old.set(modelViewMatrix);
+        var oldLight = glMatrix.mat3.create();
+        oldLight.set(lightingInfo);
+
         // oml im so smart 😎
+        // this basically makes the model view matrix so that the zombie is in the correct position and orientation
         var front = glMatrix.vec3.create();
-        front[0] = Math.cos(glMatrix.glMatrix.toRadian(ea[0])) * Math.cos(glMatrix.glMatrix.toRadian(ea[1]));
-        front[1] = Math.sin(glMatrix.glMatrix.toRadian(ea[1]));
-        front[2] = Math.sin(glMatrix.glMatrix.toRadian(ea[0])) * Math.cos(glMatrix.glMatrix.toRadian(ea[1]));
+        front[0] = Math.cos(glMatrix.glMatrix.toRadian(ea[1])) * Math.cos(glMatrix.glMatrix.toRadian(ea[0]));
+        front[1] = Math.sin(glMatrix.glMatrix.toRadian(ea[0]));
+        front[2] = Math.sin(glMatrix.glMatrix.toRadian(ea[1])) * Math.cos(glMatrix.glMatrix.toRadian(ea[0]));
         glMatrix.vec3.normalize(front, front);
         var posPlusFront = glMatrix.vec3.create();
         glMatrix.vec3.add(posPlusFront, pos, front);
         var look = glMatrix.mat4.create();
         glMatrix.mat4.targetTo(look, pos, posPlusFront, [0,1,0]);
         glMatrix.mat4.multiply(modelViewMatrix, modelViewMatrix, look);
+
+        // now we must rotate the light direction
+        var lightDir = [lightingInfo[0], lightingInfo[1], lightingInfo[2]];
+        glMatrix.vec3.rotateX(lightDir, lightDir, [0, 0, 0], glMatrix.glMatrix.toRadian(ea[0]));
+        glMatrix.vec3.rotateY(lightDir, lightDir, [0, 0, 0], glMatrix.glMatrix.toRadian(ea[1]));
+        lightingInfo[0] = lightDir[0]; lightingInfo[1] = lightDir[1]; lightingInfo[2] = lightDir[2];
+
         flushUniforms();
         gl.useProgram(buffers_d[this.shaderName].compiled);
         gl.drawArrays(gl.TRIANGLES, 0, this.data[1]["position"].length/3);
         modelViewMatrix = old;
+        lightingInfo = oldLight;
         flushUniforms();
     }
     static propertyLookup = {
@@ -57,13 +70,11 @@ class AnimationRenderer {
 bindTexture(loadTexture("./static/zw4/gltf/grass.png?rand_num="+Math.random()), 0);
 
 var models = {nothing: {position: [], color: [], normal: [], texCoord: []}};
-var animators = {zombie: false};
+var animators = {"zomb_Awajiba": false};
 var oTex = {
-	"resource": "RESOURCE MONITOR.png",
 	"inv": "INVENTORY.png",
 	"invPointer": "invselect.png",
     "grass": "grass.png",
-    "defenses": "DEFENSES.png",
 };
 
 var itemTexCoords = {
@@ -78,38 +89,34 @@ var itemTexCoords = {
 };
 
 var objNames = {
-    elmTree: "tree1",
-    glgun: "GL gun",
-    basicbullet: "basicbullet",
-    rock1: "rock1",
-    rock2: "rock2",
-    rock3: "rock3",
-    iron1: "iron1",
-    iron2: "iron2",
-    silicon: "silicon",
     logo: "logo",
-    cell1_1: "buildingobj/cell1.1",
-    cell1_2: "buildingobj/cell1.2",
-    cell2_1: "buildingobj/cell2.1",
-    cell2_2: "buildingobj/cell2.2",
-    cell3_1: "buildingobj/cell3.1",
-    cell3_2: "buildingobj/cell3.2",
-    support: "buildingobj/support",
+    skybox: "skybox",
+    gun_MP40: "mp40",
+    "gun_MAC M10": "mac10"
 };
 
 var hbNames = {
-    hb_cell1_1: "buildingobj/cell1.1.hb",
-    hb_cell1_2: "buildingobj/cell1.2.hb",
-    hb_cell2_1: "buildingobj/cell2.1.hb",
-    hb_cell2_2: "buildingobj/cell2.2.hb",
-    hb_cell3_1: "buildingobj/cell3.1.hb",
-    hb_cell3_2: "buildingobj/cell3.2.hb",
+    //
+};
+
+var audios = {
+	"pop": "./static/worldgentest/gltf/sfx/pop.mp3",
+	"tree": "./static/worldgentest/gltf/sfx/tree.mp3",
+	"tree2": "./static/worldgentest/gltf/sfx/tree2.mp3",
+	"rock1": "./static/worldgentest/gltf/sfx/rockbullet1.mp3",
+	"rock2": "./static/worldgentest/gltf/sfx/rockbullet2.mp3",
+	"rock3": "./static/worldgentest/gltf/sfx/rockbullet3.mp3",
+};
+
+// buffer all the audio
+for (var prop in audios) {
+    new Audio(audios[prop]);
 }
 
 function checker() {}
 var loadStart = Date.now();
-loadAnimation("./static/zw4/gltf/zombie poses/walk", "./static/zw4/gltf/zombie poses/walk", "walk", 30,
-    (res)=>{models.zombie = res; checker(); animators.zombie = new AnimationRenderer(res, "objShader");});
+loadAnimation("./static/zw4/gltf/zombie poses/walk2", "./static/zw4/gltf/zombie poses/walk2", "walk2", 30,
+    (res)=>{checker(); animators["zomb_Awajiba"] = new AnimationRenderer(res, "objShader");});
 
 for (var prop in objNames) {
     let pr = prop;
@@ -155,7 +162,10 @@ function chk() {
     if (good) {
         console.log("assets loaded in " + (Date.now() - loadStart));
         console.log("everyting loaded in " + (Date.now() - allStart));
-        dredy();
+        assetsReady();
+        texW = oTex.grass.width;
+        texH = oTex.grass.height;
+        clearInterval(chkHandle);
     }
 }
 
