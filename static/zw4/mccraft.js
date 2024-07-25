@@ -71,7 +71,6 @@ function gameHelp() {
 
 function startGame() {
 	player = new Player();
-	playerName = document.getElementById("nameBox").value;
 	Gun.init();
 	Bullet.init();
 	oCtx.fillText("Loading...", 100, 100);
@@ -80,13 +79,14 @@ function startGame() {
     document.getElementById("homeDiv").style.display = "none";
 	canvas.requestPointerLock();
 	IHP.debugLine = debugLine;
+	BasicDijkstra.debugLine = debugLine;
 
 	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
 	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
 
-	for (var i=0; i<10; i++) {
-		new Zombie(40, 10, (i-5) * 3, "Awajiba", new AwajibaPathfinder(40, 10, (i-5)*3));
-	}
+	new Level(models.level1).load();
+
+	menuSongAudioObject.pause();
 }
 var deadSong = new Audio("/static/worldgentest/songs/pressure.mp3");
 deadSong.currentTime = 40.37;
@@ -112,7 +112,7 @@ function mix(a, b, amount) {
 	return a * (1 - amount) + b * amount;
 }
 
-var __frameNum = 0, __ptime = 0;
+var __frameNum = 0, __ptime = 0, framesPassed = 0;;
 
 function renderProgressCircle(msg, remaining, total) {
 	// renders a surviv-like progress circle
@@ -132,6 +132,7 @@ function renderProgressCircle(msg, remaining, total) {
 }
 
 function gameLoop(_t) {
+	framesPassed++;
 	var _startTime = performance.now();
 	if (lastTime == -1) {lastTime = _t;}
 	var dt = _t - lastTime;
@@ -143,14 +144,18 @@ function gameLoop(_t) {
 	globalFogColor = glMatrix.vec4.fromValues(0, 0, 0, 0);
 
 	// movement
+	var actualSpeed = player.speed;
+	if (divisDownKeys["ShiftLeft"]) {
+		actualSpeed = player.sprintSpeed;
+	}
 	var scaledFront = glMatrix.vec3.create();
 	scaledFront[0] = player.cameraFront[0]; scaledFront[2] = player.cameraFront[2];
 	glMatrix.vec3.normalize(scaledFront, scaledFront);
-	glMatrix.vec3.scale(scaledFront, scaledFront, player.speed * dt/1000);
+	glMatrix.vec3.scale(scaledFront, scaledFront, actualSpeed * dt/1000);
 	var right = glMatrix.vec3.create();
 	glMatrix.vec3.cross(right, scaledFront, player.cameraUp);
 	glMatrix.vec3.normalize(right, right);
-	glMatrix.vec3.scale(right, right, player.speed * dt/1000);
+	glMatrix.vec3.scale(right, right, actualSpeed * dt/1000);
 
 	if (divisDownKeys["KeyW"]) {
 		glMatrix.vec3.add(player.pos, player.pos, scaledFront);
@@ -174,6 +179,7 @@ function gameLoop(_t) {
 		player.selected.update(dt, true);
 		if (mouseDown && player.selected.canShoot()) {
 			player.selected.recoil();
+			new Audio("./static/zw4/sfx/fire.mp3").play();
 			var scaledFront = glMatrix.vec3.create();
 			var distanceFromPlayer = player.selected.specs.barrelLength;
 			var spawnPos = glMatrix.vec3.create();
@@ -209,6 +215,7 @@ function gameLoop(_t) {
 	player.selected.render(mouseDown);
 
 	IHP.drawAllBoxes();
+	player.pathfinder.renderGrid();
 
 	// GUI
 	// crosshair
@@ -280,8 +287,9 @@ function gameLoop(_t) {
 	debugDispNow["hitboxes shown"] = IHP.drawLines;
 	debugDispNow["player yaw"] = player.yaw;
 	debugDispNow["player pitch"] = player.pitch;
+	debugDispNow["player pos"] = "(" + Math.round(player.pos[0] * 100)/100 + ", " + Math.round(player.pos[1] * 100)/100 + ", " + Math.round(player.pos[2] * 100)/100 + ")";
 	
-	if (Math.random() < 0.01) {
+	if (framesPassed % 200 == 0) {
 		debugDispNow["frame time"] = performance.now() - _startTime;
 	}
     requestAnimationFrame(gameLoop);

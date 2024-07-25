@@ -67,6 +67,70 @@ class AnimationRenderer {
     }
 }
 
+// custom map loader
+function loadMapFromObj(url, mtlUrl, callback) {
+	var res = {"position":[], "normal":[], "color": [], "texCoord": [], "hitboxes": [], "zombies": []};
+	var rnd = Math.random();
+	// rnd = 1;
+	request(url+"?rand="+rnd, function(txt) { // jimmy rigged but it works
+		var data = parseOBJ(txt);
+		var rnd = Math.random();
+		// rnd = 1;
+		request(mtlUrl+"?rand="+rnd, function(mats) {
+			var materials = parseMTL(mats);
+			for (const geom of data.geometries) {
+                if (geom.material == "hbmat") {
+                    // this is a hitbox
+                    var mins = [Infinity, Infinity, Infinity];
+                    var maxs = [-Infinity, -Infinity, -Infinity];
+                    var p = geom.data.position;
+                    for (let i=0; i<p.length; i+=3) {
+                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
+                            mins[ind] = Math.min(mins[ind], el);
+                            maxs[ind] = Math.max(maxs[ind], el);
+                        });
+                    }
+                    var toPush = [];
+                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
+                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
+                    res.hitboxes.push(toPush);
+                } else if (geom.material.startsWith("zombiemat_")) {
+                    // this is a zombie
+                    // zombies have an aggro radius, this is just the size of the cube that is the zombie
+                    var mins = [Infinity, Infinity, Infinity];
+                    var maxs = [-Infinity, -Infinity, -Infinity];
+                    var p = geom.data.position;
+                    for (let i=0; i<p.length; i+=3) {
+                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
+                            mins[ind] = Math.min(mins[ind], el);
+                            maxs[ind] = Math.max(maxs[ind], el);
+                        });
+                    }
+                    var toPush = [];
+                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
+                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
+                    res.zombies.push({type: geom.material.replace("zombiemat_", ""), pos: toPush[0], dx: toPush[1][0], dy: toPush[1][1], dz: toPush[1][2]});
+                }
+                else {
+                    res.position = res.position.concat(geom.data.position);
+                    res.normal = res.normal.concat(geom.data.normal);
+                    res.texCoord = res.texCoord.concat(geom.data.texcoord);
+                    res.color = res.color.concat(
+                        mList(materials[geom.material].diffuseColor.concat([1.0]),geom.data.position.length/3));
+                    // we don't use any of the mtl specs except for the diffuse color cuz yeah
+                }
+			}
+			for (var i=1; i<res.texCoord.length; i+=2) {
+				res.texCoord[i] = 1 - res.texCoord[i];
+			}
+			callback(res, url);
+
+		});
+	});
+}
+
 bindTexture(loadTexture("./static/zw4/gltf/grass.png?rand_num="+Math.random()), 0);
 
 var models = {nothing: {position: [], color: [], normal: [], texCoord: []}};
@@ -92,11 +156,15 @@ var objNames = {
     logo: "logo",
     skybox: "skybox",
     gun_MP40: "mp40",
-    "gun_MAC M10": "mac10"
+    "gun_MAC M10": "mac10",
 };
 
 var hbNames = {
     //
+};
+
+var levelNames = {
+    level1: "buildingobj/level1"
 };
 
 var audios = {
@@ -132,6 +200,13 @@ for (var prop in hbNames) {
         cb);
 }
 
+for (var prop in levelNames) {
+    let pr = prop;
+    function cb(res) {models[pr] = res;}
+    loadMapFromObj("./static/zw4/gltf/"+levelNames[prop]+".obj", "./static/zw4/gltf/"+levelNames[prop]+".mtl",
+        cb);
+}
+
 for (var prop in oTex) {
     var img = new Image();
     img.src = ('./static/zw4/gltf/gui/' + oTex[prop]).slice(1);
@@ -144,6 +219,9 @@ function chk() {
         if (!models[prop]) {good = false;}
     }
     for (var prop in hbNames) {
+        if (!models[prop]) {good = false;}
+    }
+    for (var prop in levelNames) {
         if (!models[prop]) {good = false;}
     }
     if (good == false) {}

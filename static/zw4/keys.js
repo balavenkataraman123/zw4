@@ -12,6 +12,9 @@ function onKeyDown(event) {
 		if (keyCode == "KeyB") {
 			IHP.drawLines = !IHP.drawLines;
 		}
+		if (keyCode == "KeyP") {
+			BasicDijkstra.debugMode = !BasicDijkstra.debugMode;
+		}
 	}
 }
 function onKeyUp(event) {

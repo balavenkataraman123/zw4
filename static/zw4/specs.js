@@ -30,10 +30,10 @@ var gunSpecs = {
 var zombieSpecs = {
     "Awajiba": {
         speed: 8,
-        dx: 0.7, dy: 2, dz: 0.7,
+        dx: 0.4, dy: 0.5, dz: 0.4,
         health: 30,
         gun: "MP40",
-        firePos: [3.8585, 3.0477, -0.412], // [y, z, x] in the blender file for some reason
+        firePos: [0, 0.984, -0.1], // [y, z, x] in the blender file for some reason
         spawnDelay: 1 // on average, how many seconds to spawn one zombie
     }
 }

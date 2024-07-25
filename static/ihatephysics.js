@@ -28,6 +28,8 @@ class PhysicsObject {
         this.pos = [x, y, z];
         this.vel = [0, 0, 0];
         this.ignores = new Set();
+        this.collidesWith = new Set();
+        this.useAllowList = false; // if false, then we collide with everything except this.ignores, otherwise, we don't collide with anything other than this.collidesWith
         this.trigger = trigger;
         this.dx = dx; this.dy = dy; this.dz = dz;
         this.kinematic = kin;
@@ -55,7 +57,7 @@ class PhysicsObject {
         // doesn't do anything, just checks
         var colliding = 0;
         for (let i=0; i<3; i++) {
-            if (Math.abs(pos1[i] - pos2[i]) < (w1[i] + w2[i])/2) {colliding += 1;}
+            if (Math.abs(pos1[i] - pos2[i]) < (w1[i] + w2[i])) {colliding += 1;}
         }
         return colliding == 3;
     }
@@ -74,7 +76,12 @@ class PhysicsObject {
         if (!a1 || !a2) {
             console.log(a1, a2);
         }
-        if (a1.ignores.has(a2.constructor.name) || a2.ignores.has(a1.constructor.name)) {return;}
+        
+        if (!(((a1.useAllowList && a1.collidesWith.has(a2.constructor.name)) || (!a1.useAllowList && !a1.ignores.has(a2.constructor.name))) &&
+        ((a2.useAllowList && a2.collidesWith.has(a1.constructor.name)) || (!a2.useAllowList && !a2.ignores.has(a1.constructor.name))))) {
+            // only if both of them allow themselves to collide with the other one, then collision happens
+            return;
+        }
         // returns bool and assigns a1 and a2's positions and velocities automatically.
         if (a1.kinematic && !a2.kinematic) {
             [a1, a2] = [a2, a1]; // if one of them is kinematic, it will always be a2.

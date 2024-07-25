@@ -11,7 +11,7 @@
 		<script src="./static/ihatephysics.js"></script>
 		<script>
 			var menuSongPlayed = false;
-			var menuSongAudioObject = new Audio("./static/zw4/songs/theme.mp3");
+			var menuSongAudioObject = new Audio("./static/zw4/songs/newtheme.mp3");
 			function playMenuSong() {
 				if (menuSongPlayed) {
 					return;
@@ -41,9 +41,7 @@
 		<div class="homeDiv" id="homeDiv">
 			<div class="homeDivInner" id="homeDivInner">
 				<center>
-					<h1>Zombie Wars 4</h1>
-					<input type="text" id="nameBox" placeholder="Your Name">
-					<br><br>
+					<br><br><br>
 					<button id="startBtn" onclick = "startGame();">Loading (don't click)</button>
 					<br><br>
 					<button id="helpBtn" onclick="gameHelp();">How to Play</button>
@@ -51,10 +49,6 @@
 						<strong>OBJECTIVE: Build your base and defend against waves of zombies!<br>
 						Controls</strong><br>
 						<p>WASD to move, right click to place block, left click for actions, move mouse to look around</p><br>
-						<strong>Resources and Towers</strong><br>
-						<p>Resources can be found in grass patches, inside chests, generated through farms, or dropped from zombies.
-							You can use resources to make towers to kill zombies.
-						</p>
 					</div>
 				</center>
 			</div>

@@ -5,7 +5,7 @@ It was found that theh old plan was quite complicated, and after learning a bit 
  - zombies can fly to make pathfinding easier
 - orange zone that continually pushes the player forward so they can't just camp
  - since the loading/unloading of the map would also be quite complicated, we're just gonna have a level system and once you complete a level, a new level loads
-  - zombies spawn at the endpoint of the level and "defend" the endpoint, while at the same time the orange zone squeezes you forward
+  - zombies spawn at predetermined places and once you enter into their vicinity, they aggro on you and don't stop until they die (or you die)
 - levels are all manually created
 
 # Guns
@@ -92,3 +92,36 @@ the levels follow a progression from underground to the clouds and lastly a spac
 - Level 5: ruined sky city
 - Level 6: space station (no gravity, spinning, confusing af)
 - Level 7: credits
+
+## How zombies and hitboxes will be placed
+zombies will be placed as cubes with "zombiemat_x" in blender and x is the zombie type
+hitboxes will be placed with "hbmat" and the ending teleporter (to get to the next level) will be "tpmat"
+and then we will have a custom loader function that recognizes these materials in the "geometries" of parseOBJ's output
+so no more "loadObjAndHitbox" from division or whatever
+
+# Specifics of zombie behavior
+As mentioned, when you enter into a zombie's aggro radius, it aggroes on you and doesn't stop
+- however, when the zombie exits from the radius of pathfinding of the player, it will stop (because it's too expensive to pathfind from far away)
+
+Zombies will fly and look kind of like the skibidi toilets (flying = easier to pathfind)
+
+Like the player, the zombies will move around by adding and subtracting position (i.e instant movement) which makes pathfinding a lot easier
+
+## Pathfinding algorithm
+to make pathfinding easier, zombies will not collide with other zombies, preventing the situation where two zombies want to go to one place and they push each other so no one reaches it
+
+basically most zombies will be turrets which don't move, making everything easier
+
+but the ones which do move will pick a spot within a radius of the player
+
+then they will use Dijkstra's algorithm to pathfind towards that spot
+
+once they reached that spot (with a certain tolerance), they do it all over again
+
+Pathfinding:
+- Create a 40x40 m grid around the player, with 3 subdivisions per meter (so 14 400 vertices in total)
+    - see which ones are passable by zombies (we will need to know the zombie's size)
+    - remove the ones that aren't
+    - put edges between the remaining points
+- When a zombie find a new spot to pathfind to, they can just use that grid to run Dijkstra's to that spot
+- When the player moves more than 5 m from their original position, a new grid is generated
