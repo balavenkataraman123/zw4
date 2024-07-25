@@ -39,19 +39,23 @@
 		<p id = "debugStuff" style="position: absolute;left:10;top:0;font-weight:bold;background-color:#FFFFFF99;"></p>
 		<!-- ------home screen------- -->
 		<div class="homeDiv" id="homeDiv">
-			<div class="homeDivInner" id="homeDivInner">
+			<div class="homeDivInner">
 				<center>
 					<br><br><br>
 					<button id="startBtn" onclick = "startGame();">Loading (don't click)</button>
-					<br><br>
-					<button id="helpBtn" onclick="gameHelp();">How to Play</button>
-					<div id="helpDiv" style="display:none;">
-						<strong>OBJECTIVE: Build your base and defend against waves of zombies!<br>
-						Controls</strong><br>
-						<p>WASD to move, right click to place block, left click for actions, move mouse to look around</p><br>
-					</div>
+						<br><br>
+						<button id="helpBtn" onclick="gameHelp();">How to Play</button>
+						<div id="helpDiv" style="display:none;">
+							<strong>Move forward. Conquer. Survive.</strong>
+							<p>Controls: generic FPS controls (WASD to move, cursor to aim, click to shoot)<br>
+							1 and 2 to switch to another weapon<br>
+							Move forward in the map and get to the end!</p>
+							<p id="betaWarning">Zombiewars 4 is in beta and thus it appears really simplistic
+								(i.e not even a proper item dropping system or ammo count), but I promise there's much more &#60;3</p>
+						</div>
 				</center>
 			</div>
+			<img src="./static/zw4/gltf/gui/logo.png" id="logoimg">
 		</div>
 		<!-- ------pause------- -->
 		<div id="pauseDiv" class="homeDivInner">

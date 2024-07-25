@@ -18,20 +18,11 @@
 
 .homeDivInner {
 	position: absolute;
-	left: calc(100% / 2 - 20%);
-	top: 20%;
-	width: 40%;
-	height: 60%;
-	border: none;
-	background-color: #AA888800;
-	overflow: scroll;
-	-ms-overflow-style: none;
-	scrollbar-width: none;
+	top: 30%;
+	width: 100%;
 }
+
 #pauseDiv {display: none;}
-.homeDivInner::-webkit-scrollbar {
-	display: none;
-}
 
 #nameBox {
 	font-family: "Open Sans";
@@ -42,17 +33,35 @@
 	font-family: "Ubuntu";
 	font-size: 3rem;
 	padding: 5% 10%;
+	background-color: crimson;
+	color: beige;
+	border: none;
 }
 #helpBtn {
 	font-family: "Open Sans";
-	background-color: #00000000;
-	padding: 3% 10%;
+	background-color: darkred;
+	color: beige;
 	transition-duration: 0.5s;
+	padding: 0.5% 1%;
+	font-size: 2rem;
 }
 #helpBtn:hover {
 	background-color: skyblue;
-	padding: 4% 11%;
-	margin: -1%;
+	padding: 1% 2%;
+}
+#logoimg {
+	position: absolute;
+	left: 0px;
+	bottom: 0px;
+	width: 30%;
+}
+
+#helpDiv {
+	background-color: white;
+	width: 30%;
+	height: 150px;
+	overflow: scroll;
+	overflow-y: scroll;
 }
 
 h1 {
