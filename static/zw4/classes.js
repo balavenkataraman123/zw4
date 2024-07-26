@@ -377,7 +377,7 @@ class Player extends PhysicsObject {
         this.maxGridCenterDeviation = 10;
     }
     genPathfindingMesh() {
-        this.pathfinder.genGrid(0.5, 0.7, 3, 4, this.pos);
+        this.pathfinder.genGrid(0.5, 0.7, 3, 4, [this.pos[0], this.pos[1], this.pos[2]]);
     }
     update(dt) {
         // update selected

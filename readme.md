@@ -125,3 +125,33 @@ Pathfinding:
     - put edges between the remaining points
 - When a zombie find a new spot to pathfind to, they can just use that grid to run Dijkstra's to that spot
 - When the player moves more than 5 m from their original position, a new grid is generated
+
+# Things to change
+so here's a list of things to change before zombiewars can go out of beta
+### Graphical/technical
+- ~~Circular fog instead of fog based on z-position~~
+- Put all of the time-consuming regeneration stuff (like regenerating the pathfinding mesh and zombie pathfinding) into a web worker so it won't block up the main thread
+- Physics raycaster so zombies only fire when there is line of sight
+- Add muzzle flash and related
+- Add particle effects (revamp the particle system as well)
+- Hit marker thingies and the little numbers that appear when you do damage
+### Gameplay-related
+- Item dropping system
+    - Ammo count
+    - Dropping different weapons/weapon swap
+- Heals
+- Nades
+- Change zombie behavior so that they fire in bursts only when they have line of sight
+### Assets
+- Balance level 1
+    - Fix the casing hitboxes so zombies don't go outside the map
+    - Change zombie position and aggro radius so it's harder to cheese them
+- Many new levels
+    - Hopefully won't take as long as the first level
+- Many new guns
+### Other
+- Menu screen with levels
+    - Also with the other things a menu screen needs like links to yt, github, etc
+- Credits menu
+- Pause
+- Trailer

@@ -1,20 +1,6 @@
 // we all love shaders eh?
 console.log("shaders loaded.");
 
-const vsSource = `
-attribute vec4 aVertexPosition;
-attribute vec4 aVertexColor;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-
-varying lowp vec4 vColor;
-
-void main() {
-	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-	vColor = aVertexColor;
-}
-`;
 const fsSource = `
 varying lowp vec4 vColor;
 
@@ -42,44 +28,6 @@ void main() {
 	}
 }
 `
-const billboardVS = `
-attribute vec4 aBillboardPos;
-
-uniform mat4 uProjectionMatrix;
-uniform mat4 ubModelViewMatrix;
-
-varying lowp vec4 vColor;
-
-void main() {
-	gl_Position = uProjectionMatrix * ubModelViewMatrix * aBillboardPos;
-	vColor = vec4(1.0, clamp(aBillboardPos.y * 10.0, 0.0, 1.0), 1.0, 1.0);
-}
-`
-const textureVS = `
-attribute vec4 aVertexPosition;
-attribute vec2 aTexCoord;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-uniform vec3 uCameraPos;
-
-varying highp vec2 texCoord;
-varying mediump float fogAmount;
-varying highp vec3 vLighting;
-
-void main() {
-	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-	texCoord = aTexCoord;/*
-	if (uCameraPos.y < 0.0) {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.08;
-	} else {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 1.0;
-	}*/
-	fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 1.0;
-	vLighting = vec3(1.0, 1.0, 1.0);
-
-}
-`
 const lightVS_t4 = `
 attribute vec4 aVertexPosition;
 attribute vec3 aVertexNormal;
@@ -99,7 +47,7 @@ varying highp vec2 texCoord2;
 varying highp vec2 texCoord3;
 varying highp vec2 texCoord4;
 varying highp vec4 mixFactor;
-varying mediump float fogAmount;
+varying vec3 vPosition;
 varying highp vec3 vLighting;
 
 void main() {
@@ -109,13 +57,7 @@ void main() {
 	texCoord3 = aTexCoord3;
 	texCoord4 = aTexCoord4;
 	mixFactor = aMixFactor;
-	/*
-	if (uCameraPos.y < 0.0 && false) {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.08;
-	} else {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 1.0;
-	}*/
-	fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 0.3;
+	vPosition = (uModelViewMatrix * aVertexPosition).xyz;
 	highp float directional = clamp(dot(aVertexNormal, uLightingInfo[0]), 0.0, 1.5);
 	vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
 	float as = dot(aVertexNormal.xyz, vec3(1.0,0.0,0.0));
@@ -134,17 +76,15 @@ uniform vec3 uCameraPos;
 uniform mat3 uLightingInfo; // 1st row is light direction, 2nd is color, 3rd is ambient light
 
 varying highp vec2 texCoord;
-varying mediump float fogAmount;
+varying mediump vec3 vPosition;
 varying highp vec3 vLighting;
 
 void main() {
 	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
 	texCoord = aTexCoord;
-	fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 0.3;
+	vPosition = (uModelViewMatrix * aVertexPosition).xyz;
 	highp float directional = max(dot(aVertexNormal, uLightingInfo[0]), 0.0);
 	vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
-	float as = dot(aVertexNormal.xyz, vec3(1.0,0.0,0.0));
-	// vLighting = vec3(as, as, as);
 	gl_PointSize = 100.0;
 }
 `;
@@ -165,10 +105,7 @@ varying lowp vec4 vColor;
 void main() {
 	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
 
-	if (uCameraPos.y < 0.0) {
-		float a = -(uModelViewMatrix * aVertexPosition).z * 0.08;
-	}
-	mediump float fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 0.3;
+	mediump float fogAmount = length(uModelViewMatrix * aVertexPosition) * 0.05 - 0.3;
 	highp vec4 transformedNormal = vec4(aVertexNormal, 1.0);
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
 	highp vec3 vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
@@ -213,7 +150,7 @@ void main() {
 	transformed.xyz += aTranslation;
 	gl_Position = uProjectionMatrix * uModelViewMatrix * transformed;
 
-	mediump float fogAmount = -(uModelViewMatrix * transformed).z * 0.05 - 0.3;
+	mediump float fogAmount = length(uModelViewMatrix * transformed) * 0.05 - 0.3;
 	highp vec4 transformedNormal = rotateY(vec4(aVertexNormal.xyz, 1.0), aYRot);
 	transformedNormal = rotateX(transformedNormal, aXRot);
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
@@ -229,14 +166,14 @@ varying highp vec3 vLighting;
 uniform sampler2D uSampler;
 uniform float uFogAmount;
 uniform vec4 uFogColor;
-varying mediump float fogAmount;
+varying mediump vec3 vPosition;
 uniform float uAlphaAdj;
 
 void main() {
-	// if (gl_FragCoord.z < 0.0) {discard;}
 	lowp vec4 col = texture2D(uSampler, texCoord);
 	if (col.a < uAlphaAdj) {discard;}
 	col = vec4(col.rgb * vLighting, col.a);
+	float fogAmount = length(vPosition) * 0.05 - 0.3;
 	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
 	gl_FragColor = col;
 	if (col.a == 0.0) {
@@ -259,9 +196,10 @@ uniform sampler2D uSampler3;
 uniform sampler2D uSampler4;
 uniform vec4 uFogColor;
 uniform float uFogAmount;
-varying mediump float fogAmount;
+varying vec3 vPosition;
 
 void main() {
+	float fogAmount = length(vPosition) * 0.05 - 0.3;
 	highp vec4 mf = mixFactor;
 	float sum = mf.x + mf.y + mf.z + mf.w;
 	mf.x /= sum; mf.y /= sum; mf.z /= sum; mf.w /= sum;
@@ -352,7 +290,7 @@ uniform vec3 uCameraPos;
 uniform mat3 uLightingInfo;
 
 varying vec2 texCoord;
-varying float fogAmount;
+varying vec3 vPosition;
 varying vec3 vLighting;
 
 void main() {
@@ -360,7 +298,7 @@ void main() {
 	vec3 right = vec3(uModelViewMatrix[0].x, uModelViewMatrix[1].x, uModelViewMatrix[2].x);
 	vec3 up = vec3(uModelViewMatrix[0].y, uModelViewMatrix[1].y, uModelViewMatrix[2].y);
 	position.xyz += (right * aCorner.x) + (up * aCorner.y);
-	fogAmount = -(uModelViewMatrix * position).z * 0.05 - 0.3;
+	vPosition = (uModelViewMatrix * position).xyz;
 	texCoord = aTexCoord;
 	vLighting = uLightingInfo[2] + (uLightingInfo[1] * 0.5 * 0.65);
 	gl_Position = uProjectionMatrix * uModelViewMatrix * position;
@@ -384,45 +322,3 @@ void main() {
 	}
 }
 `
-const textVS = `
-attribute vec4 aVertexPosition;
-attribute vec2 aTexCoord;
-attribute vec4 aTextColor;
-
-uniform mat4 uModelViewMatrix;
-uniform mat4 uProjectionMatrix;
-uniform vec3 uCameraPos;
-
-varying highp vec2 texCoord;
-varying mediump float fogAmount;
-varying lowp vec4 vColor;
-
-void main() {
-	gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-	texCoord = aTexCoord;
-	vColor = aTextColor;
-	if (uCameraPos.y < 0.0) {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.08;
-	} else {
-		fogAmount = -(uModelViewMatrix * aVertexPosition).z * 0.05 - 1.0;
-	}
-}
-`;
-const textFS = `
-precision mediump float;
-varying highp vec2 texCoord;
-uniform sampler2D uSampler;
-uniform vec4 uFogColor;
-varying mediump float fogAmount;
-varying lowp vec4 vColor;
-
-void main() {
-	lowp vec4 texel = texture2D(uSampler, texCoord);
-	if (texel.a == 0.0) {
-		discard;
-	} else {
-		lowp vec4 col = vec4(vColor.rgb, mix(vColor.a, texel.a, 0.5));
-		gl_FragColor = mix(col, uFogColor, clamp(fogAmount, 0.0, 1.0));
-	}
-}
-`;

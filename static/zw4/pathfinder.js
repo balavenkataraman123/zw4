@@ -202,7 +202,7 @@ class AwajibaPathfinder {
         // If they couldn't get there within attentionSpan seconds, they pick a new spot
         this.pos = [0, 0, 0];
         this.target = [0, 0, 0];
-        this.epsilon = 3;
+        this.epsilon = 0.2;
         this.targetRadius = 10;
         this.radiusDeviation = 1;
         this.attentionSpan = 7000;
