@@ -255,6 +255,8 @@ class Zombie extends PhysicsObject {
     // the player.
     constructor(x, y, z, type, pathfinder, aggroWidth, add = true) {
         super(x, y, z, zombieSpecs[type].dx, zombieSpecs[type].dy, zombieSpecs[type].dz, false, false, true);
+        this.id = Math.floor(Math.random() * 69420); // so when it requests a path from the worker, and the worker sends it back, we can find out who asked :trollface:
+
         this.anim = animators["zomb_" + type];
         this.type = type;
         this.gun = new Gun(zombieSpecs[type].gun);
@@ -312,8 +314,7 @@ class Zombie extends PhysicsObject {
             if (zomb.aggroed) {
                 // pathfind
                 glMatrix.vec3.add(zomb.pos, zomb.pos, glMatrix.vec3.scale([0, 0, 0],
-                    zomb.pathfinder.update(dt, zomb.pos), zombieSpecs[zomb.type].speed * dt/1000));
-                
+                    zomb.pathfinder.update(dt, zomb.pos, zomb.id), zombieSpecs[zomb.type].speed * dt/1000));
                 // fire
                 zomb.gun.update(dt, true);
                 if (zomb.gun.canShoot()) { // zombies shoot randomly to prevent them all shooting at the same time
@@ -372,12 +373,15 @@ class Player extends PhysicsObject {
         this.selected = this.inv[0];
         this.health = 100;
         this.maxHealth = 100;
-        this.pathfinder = new BasicDijkstra();
-        this.pathfinder.genGrid(0.5, 1.5, 2, 4, [0, 0, 0]);
+        
         this.maxGridCenterDeviation = 10;
+        this.lastCenter = [-69, -69, -69];
+        PathfinderInterface.sendPhysicsObjects();
+        PathfinderInterface.genGrid(0.5, 0.7, 3, 4, [this.pos[0], this.pos[1], this.pos[2]]);
     }
     genPathfindingMesh() {
-        this.pathfinder.genGrid(0.5, 0.7, 3, 4, [this.pos[0], this.pos[1], this.pos[2]]);
+        PathfinderInterface.sendPhysicsObjects();
+        PathfinderInterface.genGrid(0.5, 0.7, 3, 4, [this.pos[0], this.pos[1], this.pos[2]]);
     }
     update(dt) {
         // update selected
@@ -402,10 +406,9 @@ class Player extends PhysicsObject {
         }
 
         // if the player strayed too far from the last grid center, generate a new pathfinding mesh
-        if (glMatrix.vec3.dist(this.pathfinder.center, this.pos) > this.maxGridCenterDeviation) {
-            (async function() {
-                player.genPathfindingMesh();
-            })();
+        if (glMatrix.vec3.dist(this.lastCenter, this.pos) > this.maxGridCenterDeviation) {
+            this.genPathfindingMesh();
+            this.lastCenter = [this.pos[0], this.pos[1], this.pos[2]];
         }
     }
     jump() {
