@@ -6,6 +6,24 @@ var debugDispNow = {}; var showDebug = true;
 var firstTime = 0;
 var oW, oH;
 var globalSkybox;
+var creativeMode = false;
+var generalWorker;
+
+// creative mode interval
+setInterval(function() {
+	if (creativeMode) {
+		PhysicsObject.GlobalGravity[1] = 0;
+		if (window.player) {
+			player.health = 100;
+		}
+		if (window.divisDownKeys?.Comma) {
+			player.pos[1] -= 0.05;
+		}
+		if (window.divisDownKeys?.Period) {
+			player.pos[1] += 0.05;
+		}
+	}
+}, 20);
 
 function vec3_avg(a, b, c, d) {return [(a[0]+b[0]+c[0]+d[0])/2, (a[1]+b[1]+c[1]+d[1])/2, (a[2]+b[2]+c[2]+d[2])/2];}
 function vec3_cross(a, b) {
@@ -70,16 +88,17 @@ function gameHelp() {
 }
 
 function startGame() {
+	generalWorker = new Worker("./static/zw4/worker.js?randNum="+Math.random());
 	player = new Player();
 	Gun.init();
 	Bullet.init();
+	PathfinderInterface.init();
 	oCtx.fillText("Loading...", 100, 100);
 	requestAnimationFrame(function(t) {firstTime = t;});
     requestAnimationFrame(gameLoop);
     document.getElementById("homeDiv").style.display = "none";
 	canvas.requestPointerLock();
 	IHP.debugLine = debugLine;
-	BasicDijkstra.debugLine = debugLine;
 
 	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
 	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
@@ -143,6 +162,7 @@ function gameLoop(_t) {
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	globalFogColor = glMatrix.vec4.fromValues(0, 0, 0, 0);
 
+	__ptime = performance.now();
 	// movement
 	var actualSpeed = player.speed;
 	if (divisDownKeys["ShiftLeft"]) {
@@ -191,17 +211,24 @@ function gameLoop(_t) {
 				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5);
 		}
 	}
-
+	// console.log("movement headers took " + (performance.now() - __ptime));
+	__ptime = performance.now();
 	
 
 	// updates
+	
 	IHP.physicsUpdate(dt, 16.666);
+	// console.log("physics took " +  + (performance.now() - __ptime));
+	__ptime = performance.now();
 	player.update(dt);
 	Bullet.update(dt);
 	Item.update(dt);
 	Zombie.update(dt);
+	
+	// console.log("player, bullets, items and zombies took "  + (performance.now() - __ptime));
 
 	// rendering
+	__ptime = performance.now();
 	flushUniforms();
 	globalSkybox.render(player.cameraFront, player.cameraUp);
 
@@ -215,9 +242,12 @@ function gameLoop(_t) {
 	player.selected.render(mouseDown);
 
 	IHP.drawAllBoxes();
-	player.pathfinder.renderGrid();
+	// player.pathfinder.renderGrid();
+
+	// console.log("all rendering took "  + (performance.now() - __ptime));
 
 	// GUI
+	__ptime = performance.now();
 	// crosshair
 	if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
 		oCtx.fillStyle = "black";
@@ -292,5 +322,6 @@ function gameLoop(_t) {
 	if (framesPassed % 200 == 0) {
 		debugDispNow["frame time"] = performance.now() - _startTime;
 	}
+	// console.log("gui took " + (performance.now() - __ptime));
     requestAnimationFrame(gameLoop);
 }

@@ -155,3 +155,18 @@ so here's a list of things to change before zombiewars can go out of beta
 - Credits menu
 - Pause
 - Trailer
+
+# Web workers
+ok so web workers are kind of dumb and information flow between main script and web workers is limited
+
+so here's the plan for what the workers are going to handle and how to sync with main script
+
+- workers will only handle the pathfinding, all other "expensive" updates like regenerating the kinematic physics sectors, regenerating the particle buffers,
+since they don't cause any noticable blips in gameplay, "if it aint broke dont fix it" so we'll just leave those on the main thread
+- main pathfinding class `PathfinderCore` will be in a worker, with stuff to receive and send messages to the main script
+- there will be a pathfinding wrapper `PathfinderInterface` class in the main script to act as an interface to the worker
+- `static PathfinderInterface.update()` will be called every frame with the physicsObjects, which will be transmitted to the worker by the interface
+    - then the core will decide when to regenerate its pathfinding mesh
+- when a zombie's pathfinder needs a path, it sends a message to the pathfinder worker, then when the path is done generating the worker sends it back,
+and we will give each zombie an ID so we know which zombie it was meant for
+- we just won't worry about debug drawing the pathfinding mesh for now
