@@ -1,0 +1,123 @@
+#canvas {
+	background-color:  skyblue;
+	position: absolute;
+	left: 0;
+	top: 0;
+}
+
+.homeDiv {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background-image: url('/static/zw4/gltf/gui/menu.png');
+	background-size: cover;
+	background-position:center;
+}
+
+.homeDivInner {
+	position: absolute;
+	top: 30%;
+	width: 100%;
+}
+
+#pauseDiv {display: none;}
+
+#nameBox {
+	font-family: "Open Sans";
+	width: 40%;
+	font-size: 2rem;
+}
+#startBtn {
+	font-family: "Ubuntu";
+	font-size: 3rem;
+	padding: 5% 10%;
+	background-color: crimson;
+	color: beige;
+	border: none;
+}
+#helpBtn {
+	font-family: "Open Sans";
+	background-color: darkred;
+	color: beige;
+	transition-duration: 0.5s;
+	padding: 0.5% 1%;
+	font-size: 2rem;
+}
+#helpBtn:hover {
+	background-color: skyblue;
+	padding: 1% 2%;
+}
+#logoimg {
+	position: absolute;
+	left: 0px;
+	bottom: 0px;
+	width: 30%;
+}
+
+#helpDiv {
+	background-color: white;
+	width: 30%;
+	height: 150px;
+	overflow: scroll;
+	overflow-y: scroll;
+}
+
+h1 {
+	font-family: "Open Sans";
+	font-size: 3rem;
+}
+
+p, strong {
+	font-family: "Open Sans";
+	font-size: 1rem;
+}
+#volumeButton {
+    position: absolute;
+    left: 90%;
+    top: 85%;
+}
+
+#upgradeDiv {
+	position: absolute;
+	left: 65%;
+	top: 85%;
+	border: 2px royalblue;
+	background-color: #11FF1199;
+	padding: 1rem;
+}
+
+#upgradeMenu {
+	position: absolute;
+	background-color: lightseagreen;
+	width: 75%;
+	height: 75%;
+	left: 12.5%;
+	top: 12.5%;
+	padding: 1rem;
+}
+
+#upgradeList {
+	overflow: scroll;
+	height: 50%;
+	border: 2px crimson;
+}
+
+#deadDiv {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	top: 0%;
+	background-color: #FF3333AA;
+	display: none;
+}
+
+#deadMsg {
+	color: white;
+	position: absolute;
+	top: 30%;
+	width: 100%;
+}
