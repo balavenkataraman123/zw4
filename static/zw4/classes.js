@@ -15,7 +15,30 @@ var bullets = [], items = [], zombies = [];
 
 class Gun {
     static addresses = {};
+    static muzzleFlashes = [];
+    static flashTexCoords = [];
+    static muzzleFlashAddress;
     static init() {
+        var texCycle = [0, 1,
+            1, 1,
+            1, 0,
+            0, 1,
+            1, 0,
+            0, 0]; // for the muzzle flash
+        for (var i=0; i<texCycle.length; i++) {
+            texCycle[i] *= 128/texW;
+        }
+        for (var x=0; x<2; x++) {
+            for (var y=0; y<3; y++) {
+                var toPush = [];
+                for (var i=0; i<texCycle.length; i+=2) {
+                    toPush.push(texCycle[i] + 128/texW*x);
+                    toPush.push(texCycle[i+1] + (1664+128*y)/texW);
+                }
+                this.flashTexCoords.push(toPush);
+            }
+        }
+        Gun.muzzleFlashAddress = createRenderBuffer("billboardShader");
         for (var name in gunSpecs) {
             Gun.addresses[name] = createRenderBuffer("objShader");
             var model = models["gun_" + name];
@@ -78,6 +101,49 @@ class Gun {
         gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Gun.addresses[this.name], "objShader").aVertexPosition.length/3);
         modelViewMatrix = oldMVM;
         gl.uniformMatrix4fv(buffers_d.objShader.uniform.uModelViewMatrix, false, modelViewMatrix);
+    }
+    static update(dt) {
+        Gun.muzzleFlashes = Gun.muzzleFlashes.filter((x)=>x.framesLeft>0);
+    }
+    static render() {
+        var datas = getRBdata(Gun.muzzleFlashAddress, "billboardShader");
+        for (var prop in datas) {datas[prop] = [];}
+        for (var m of Gun.muzzleFlashes) {
+            m.framesLeft--;
+            for (var i=0; i<m.numParticles; i++) {
+                var cycle = [-1.0, -1.0,
+                    1.0, -1.0,
+                    1.0, 1.0,
+                    -1.0, -1.0,
+                    1.0, 1.0,
+                    -1.0, 1.0];
+                // ik the offsets could be acheived in the aCenterOffset instead of here but im too lazy so yah
+                var offsetX = (Math.random() - 0.5) * 2, offsetY = (Math.random() - 0.5) * 2;
+                for (let a=0; a<cycle.length; a+=2) {
+                    cycle[a] += (Math.random() - 0.5) * 0.5 + offsetX;
+                    cycle[a+1] += (Math.random() - 0.5) * 0.5 + offsetY;
+                    
+                    cycle[a] *= m.size;
+                    cycle[a+1] *= m.size;
+                }
+                quickConcat(datas.aTexCoord, Gun.flashTexCoords[0]);
+                quickConcat(datas.aCorner, cycle);
+                quickConcat(datas.aCenterOffset, mList(m.pos, 6));
+            }
+        }
+
+        flushRB(Gun.muzzleFlashAddress, "billboardShader");
+        gl.useProgram(buffers_d.billboardShader.compiled);
+        useRenderBuffer(Gun.muzzleFlashAddress, "billboardShader");
+        gl.drawArrays(gl.TRIANGLES, 0, datas.aCorner.length/3);
+    }
+    static muzzleFlash(pos, size, numParticles) {
+        Gun.muzzleFlashes.push({
+            pos: pos,
+            size: size,
+            numParticles: numParticles,
+            framesLeft: 4
+        });
     }
 }
 
@@ -262,7 +328,6 @@ class Zombie extends PhysicsObject {
         this.gun = new Gun(zombieSpecs[type].gun);
         this.pathfinder = pathfinder;
         this.specs = zombieSpecs[type];
-        this.gun.specs.delay *= 3; // basically, we need to nerf the zombies
         this.yaw = 0; this.pitch = 0;
         if (add) {
             zombies.push(this);
@@ -286,6 +351,19 @@ class Zombie extends PhysicsObject {
                 }
             }
         }
+
+        // zombies will fire in bursts whenever they see the player
+        this.burstRoundsRemaining = 0;
+        this.burstCooldown = Math.random() * 3 + 3;
+    }
+    shouldFire() {
+        // computes if the zombie should fire (by using a raycast to see if it will actually hit the player)
+        var front = glMatrix.vec3.create();
+        front[0] = Math.cos(glMatrix.glMatrix.toRadian(this.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(this.pitch));
+        front[1] = Math.sin(glMatrix.glMatrix.toRadian(this.pitch));
+        front[2] = Math.sin(glMatrix.glMatrix.toRadian(this.yaw)) * Math.cos(glMatrix.glMatrix.toRadian(this.pitch));
+        glMatrix.vec3.normalize(front, front);
+        return PhysicsObject.raycast(this.pos, front, true, new Set(["Zombie"])) == player;
     }
     static update(dt) {
         zombies = zombies.filter((z)=>!z.removed);
@@ -317,8 +395,11 @@ class Zombie extends PhysicsObject {
                     zomb.pathfinder.update(dt, zomb.pos, zomb.id), zombieSpecs[zomb.type].speed * dt/1000));
                 // fire
                 zomb.gun.update(dt, true);
-                if (zomb.gun.canShoot()) { // zombies shoot randomly to prevent them all shooting at the same time
-                    var sp = zomb.gun.specs;
+                var sp = zomb.gun.specs;
+
+                // burst fire
+                if (zomb.burstRoundsRemaining > 0 && zomb.gun.canShoot()) {
+                    zomb.burstRoundsRemaining--;
                     new Audio("./static/zw4/sfx/fire.mp3").play();
                     // now we rotate bulletPos around the zombie's feet
                     // basically, since the zombie's model was rotated around its feet, we need to rotate bulletPos around the feet too
@@ -327,9 +408,15 @@ class Zombie extends PhysicsObject {
 
                     var bul = Bullet.fireBullet(bulletPos, zomb.yaw, zomb.pitch,
                         sp.spread, sp.bulletColor, sp.bulletWidth, sp.bulletLength, sp.bulletSpeed, sp.damage, 5);
+                    Gun.muzzleFlash(bulletPos, 0.75, 3);
                     for (var hb of bul.hitboxes) {
                         hb.ignores.add("Zombie"); // so the zombies don't kill themselves by firing
                     }
+                }
+                zomb.burstCooldown -= dt;
+                if (zomb.burstRoundsRemaining <= 0 && zomb.burstCooldown < 0 && zomb.shouldFire()) {
+                    zomb.burstRoundsRemaining = sp.zombieBurstRounds[0] + Math.floor(Math.random() * (sp.zombieBurstRounds[1] - sp.zombieBurstRounds[0] + 1));
+                    zomb.burstCooldown = Math.random() * 700 + 750;
                 }
             }
         }

@@ -11,6 +11,7 @@ var gunSpecs = {
         barrelLength: 1,
         roundsPerReload: 30,
         spread: 3,
+        zombieBurstRounds: [3, 7] // range for how many rounds zombies fire in a burst
     },
     "MAC M10": {
         delay: 50,
@@ -24,6 +25,7 @@ var gunSpecs = {
         barrelLength: 0.7,
         roundsPerReload: 32,
         spread: 15,
+        zombieBurstRounds: [6, 9]
     },
 }
 
@@ -34,6 +36,5 @@ var zombieSpecs = {
         health: 30,
         gun: "MP40",
         firePos: [0, 0.984, -0.1], // [y, z, x] in the blender file for some reason
-        spawnDelay: 1 // on average, how many seconds to spawn one zombie
     }
 }

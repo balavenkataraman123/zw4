@@ -362,7 +362,7 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 					 1.0, 1.0,
 					 -1.0, 1.0];
 		for (let a=0; a<this.cycle.length; a++) {
-			this.cycle[a] *= size
+			this.cycle[a] *= size;
 		}
 		for (let j=0; j<numParticles/*change later*/; j++) {
 			var computed = Array.from(this.emitFunc());
@@ -453,6 +453,11 @@ function mList(list, n) {
 		res.push(list[i % list.length]);
 	}
 	return res;
+}
+
+function quickConcat(a, b) {
+	// concat in O(b.length) instead of O(a.length + b.length)
+	for (var x of b) {a.push(x);}
 }
 
 function convertToArrayBuffer(shaderName) {

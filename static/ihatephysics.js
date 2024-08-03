@@ -147,12 +147,81 @@ class PhysicsObject {
         }
         return false;
     }
+    static lerpRay(origin, direction, x) {
+        // computes the intersection point of a ray with the yz plane with x value of `x`
+        // if the x is less than origin.x, the x is clamped
+        // returns [y, z, clamped|bool] **RETURNS A 2-COMPONENT VECTOR WITHOUT X**
+        
+        // clamp
+        if (direction[0] < 0 && x >= origin[0]) {
+            return [origin[1], origin[2], true];
+        } else if (direction[0] >= 0 && x <= origin[0]) {
+            return [origin[1], origin[2], true];
+        }
+        var dx = x - origin[0];
+        var scaled = glMatrix.vec3.scale([0,0,0], direction, 1/direction[0]);
+        return [origin[1] + scaled[1] * dx, origin[2] + scaled[2] * dx, false];
+    }
+    static lerpLineSegment(pos1, pos2, x) {
+        // computes the position of the line segment with endpoints pos1 and pos2 at x
+        // but also clamps the x to be in the range of pos1, pos2's x
+        // pos1's x must be less than pos2's x
+        // returns [pos, clamped|bool];
+        var clamped = false;
+        if (x < pos1[0]) {x = pos1[0]; clamped = true;}
+        if (x > pos2[0]) {x = pos2[0]; clamped = true;}
+        return [pos1[1] + (pos2[1] - pos1[1]) * x / (pos2[0] - pos1[0]), clamped];
+    }
+    static raycast(pos, direction, ignoresTrigger, ignoresSet, name = "PhysicsObject") {
+        // ignoresTrigger [bool] = does the raycast count trigger hitboxes
+        // ignoresSet [Set] = a set of names to ignore
+        // name = basically what name you want the raycast to be, so if an AABB ignorelists "gleb" then if you don't want to collide with that then you pass the name "gleb"
+        // false = the path is unobstructed
+        // otherwise it will return the closest physicsObject that the raycast collided with
+        IHP.lastRaycast = [pos, [pos[0] + direction[0] * 20, pos[1] + direction[1] * 20, pos[2] + direction[2] * 20], false];
+        var closestDistance = Infinity;
+        var collidingObject = false;
+        for (var p of physicsObjects) {
+            if ((ignoresTrigger && p.trigger) || ignoresSet.has(p.constructor.name) || (p.useAllowList && !p.collidesWith.has(name)) || (!p.useAllowList && p.ignores.has(name))) {
+                continue;
+            }
+            // do AABB-ray collision detection
+            var bounds = [p.pos[0] - p.dx, p.pos[0] + p.dx, p.pos[1] - p.dy, p.pos[1] + p.dy, p.pos[2] - p.dz, p.pos[2] + p.dz];
+            // we shall assume for now that the direction vector is nonzero in all its components
+            var colliding = false;
+            for (var dimension=0; dimension<3; dimension++) {
+                for (var side=0; side<2; side++) {
+                    var map = [dimension, (dimension + 2) % 3, (dimension + 1) % 3];
+                    var point = PhysicsObject.lerpRay([pos[map[0]], pos[map[1]], pos[map[2]]], [direction[map[0]], direction[map[1]], direction[map[2]]], bounds[dimension * 2 + side]);
+                    if (point[2]) {
+                        // clamped means that there is no possibility of collision
+                        continue;
+                    }
+                    var min1 = bounds[((dimension + 2) % 3) * 2], max1 = bounds[((dimension + 2) % 3) * 2 + 1];
+                    var min2 = bounds[((dimension + 1) % 3) * 2], max2 = bounds[((dimension + 1) % 3) * 2 + 1];
+                    if (min1 < point[0] && point[0] < max1 && min2 < point[1] && point[1] < max2) {
+                        colliding = true;
+                    }
+                }
+            }
+            if (colliding) {
+                var dist = glMatrix.vec3.dist(pos, p.pos);
+                if (dist < closestDistance) {
+                    closestDistance = dist;
+                    collidingObject = p;
+                }
+            }
+        }
+        IHP.lastRaycast[2] = !collidingObject;
+        return collidingObject;
+    }
 }
 
 class IHP {
     static alreadyWarned = false;
     static drawLines = false;
     static maxCoord = 500;
+    static lastRaycast = [[0,0,0],[0,0,0], false];
 
     static init() {
         setInterval(regenerateKinematics, 1000);
@@ -186,15 +255,15 @@ class IHP {
         }
     }
     static drawAllBoxes() {
+        if (!IHP.drawLines) {return;}
         for (var po of physicsObjects) {
-            if (IHP.drawLines) {
-                if (po.kinematic) {
-                    po.drawBox([1, 0, 0, 1]);
-                } else {
-                    po.drawBox([0, 1, 0, 1]);
-                }
+            if (po.kinematic) {
+                po.drawBox([1, 0, 0, 1]);
+            } else {
+                po.drawBox([0, 1, 0, 1]);
             }
         }
+        IHP.debugLine(IHP.lastRaycast[0], IHP.lastRaycast[1], IHP.lastRaycast[2]?[0,1,1,1]:[1,1,0,1]);
     }
     static physicsUpdate(dt, maxInterval) {
         for (var t=0; t<dt; t+=maxInterval) {

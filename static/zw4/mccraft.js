@@ -209,6 +209,7 @@ function gameLoop(_t) {
 				player.selected.specs.spread, player.selected.specs.bulletColor,
 				player.selected.specs.bulletWidth, player.selected.specs.bulletLength,
 				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5);
+			Gun.muzzleFlash(spawnPos, 0.3, 5);
 		}
 	}
 	// console.log("movement headers took " + (performance.now() - __ptime));
@@ -224,6 +225,7 @@ function gameLoop(_t) {
 	Bullet.update(dt);
 	Item.update(dt);
 	Zombie.update(dt);
+	Gun.update(dt);
 	
 	// console.log("player, bullets, items and zombies took "  + (performance.now() - __ptime));
 
@@ -238,6 +240,7 @@ function gameLoop(_t) {
 	Bullet.renderAll();
 	Item.renderAll();
 	Zombie.renderAll();
+	Gun.render();
 
 	player.selected.render(mouseDown);
 
