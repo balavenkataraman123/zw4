@@ -17,7 +17,7 @@ var gunSpecs = {
     },
     "MAC M10": {
         delay: 50,
-        capacity: 1000,
+        capacity: 32,
         reloadTime: 1800,
         bulletSpeed: 50,
         bulletWidth: 0.04,
@@ -25,7 +25,7 @@ var gunSpecs = {
         damage: 10,
         bulletLength: 0.8,
         barrelLength: 0.7,
-        roundsPerReload: 1000,
+        roundsPerReload: 32,
         spread: 15,
         zombieBurstRounds: [6, 9],
         cartridge: "cartridge_9x19",

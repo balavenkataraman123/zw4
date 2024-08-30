@@ -6,13 +6,13 @@ var debugDispNow = {}; var showDebug = true;
 var firstTime = 0;
 var oW, oH;
 var globalSkybox, currentLevel;
-var creativeMode = true;
+var creativeMode = false;
 var generalWorker;
 
 // creative mode interval
 setInterval(function() {
 	if (creativeMode) {
-		// PhysicsObject.GlobalGravity[1] = 0;
+		PhysicsObject.GlobalGravity[1] = 0;
 		if (window.player) {
 			player.health = 100;
 		}
