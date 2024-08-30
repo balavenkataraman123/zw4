@@ -37,6 +37,7 @@ var cubeNormals = [0,1,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,1,-1,0,0,-1,0,0,-1,0,0,0,-1
 var theTime = 0;
 var globalFogColor = [1.0, 0.0, 0.0, 0.0, 1.0];
 var globalFogAmount = 1.0;
+var particles = [];
 setInterval(function() {theTime += 0.03;}, 10);
 
 
@@ -268,6 +269,8 @@ function flushUniforms() { // WARNING: will switch programs so u gotta switch ba
 	gl.uniform1f(locs.uTime, theTime);
 	gl.uniformMatrix4fv(locs.uModelViewMatrix, false, modelViewMatrix);
 	gl.uniformMatrix4fv(locs.uProjectionMatrix, false, projectionMatrix);
+	gl.uniform4f(locs.uFogColor, ...globalFogColor);
+	gl.uniform1f(locs.uFogAmount, globalFogAmount);
 
 	locs = buffers_d.debugShader.uniform;
 	gl.useProgram(buffers_d.debugShader.compiled);
@@ -366,12 +369,13 @@ class ParticleSystem { // yet another jimmy-rigged contraption
 		}
 		for (let j=0; j<numParticles/*change later*/; j++) {
 			var computed = Array.from(this.emitFunc());
-			var lifetime = Math.random()*5+5;
+			
 			var vel = [Math.random()-0.5, startVelocity * Math.random(), Math.random()-0.5];
 			var b = buffers_d.particleShader.data;
+			var actualLifetime = lifetime * (Math.random() + 0.5);
 			for (let i=0; i<6; i++) {
 				// init the values
-				this.aLifetime.push(lifetime);
+				this.aLifetime.push(actualLifetime);
 				this.aParticleVelocity = this.aParticleVelocity.concat(vel);
 				this.aParticleCorner.push(this.cycle[i * 2]);
 				this.aParticleCorner.push(this.cycle[i * 2 + 1]);
@@ -425,7 +429,17 @@ class SkyBox {
 	}
 }
 
-function updateParticles(particles, dt=40) { // to render all particles and delete old ones
+async function updateParticleBuffers() {
+	clearShaderData("particleShader");
+	for (let j=0; j<particles.length; j++) {
+		particles[j].start = buffers_d.particleShader.data.aParticleCenterOffset.length/3;
+		shaderAddData(particles[j], "particleShader");
+		particles[j].num = buffers_d.particleShader.data.aParticleCenterOffset.length/3 - particles[j].start;
+	}
+	flush("particleShader");
+}
+
+function updateParticles(dt=40) { // to render all particles and delete old ones
 	var needUpdate = false;
 	particles = particles.filter((p)=>!p.removed);
 	for (let i=0; i<particles.length; i++) {
@@ -437,12 +451,7 @@ function updateParticles(particles, dt=40) { // to render all particles and dele
 		}
 	}
 	if (needUpdate) {
-		(async () => {
-			clearShaderData("particleShader");
-			for (let j=0; j<particles.length; j++) {
-				shaderAddData(particles[j], "particleShader");
-			}
-		})();
+		updateParticleBuffers();
 	}
 }
 

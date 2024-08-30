@@ -64,6 +64,11 @@ class PhysicsObject {
     static GlobalGravity = glMatrix.vec3.fromValues(0, -10, 0); // AP physics C land
     static friction = 0.97; // inverse cuz multiply by friction
     static checkCollideAABB(a1, a2, dt) {
+        if (!(((a1.useAllowList && a1.collidesWith.has(a2.constructor.name)) || (!a1.useAllowList && !a1.ignores.has(a2.constructor.name))) &&
+        ((a2.useAllowList && a2.collidesWith.has(a1.constructor.name)) || (!a2.useAllowList && !a2.ignores.has(a1.constructor.name))))) {
+            // only if both of them allow themselves to collide with the other one, then collision happens
+            return;
+        }
         if (a1.kinematic && a2.kinematic) {
             if (PhysicsObject.checkCollision(a1.pos, a2.pos, [a1.dx, a1.dy, a1.dz], [a2.dx, a2.dy, a2.dz])) {
                 a1.onCollision(a2, "?");
@@ -75,12 +80,6 @@ class PhysicsObject {
         }
         if (!a1 || !a2) {
             console.log(a1, a2);
-        }
-        
-        if (!(((a1.useAllowList && a1.collidesWith.has(a2.constructor.name)) || (!a1.useAllowList && !a1.ignores.has(a2.constructor.name))) &&
-        ((a2.useAllowList && a2.collidesWith.has(a1.constructor.name)) || (!a2.useAllowList && !a2.ignores.has(a1.constructor.name))))) {
-            // only if both of them allow themselves to collide with the other one, then collision happens
-            return;
         }
         // returns bool and assigns a1 and a2's positions and velocities automatically.
         if (a1.kinematic && !a2.kinematic) {
@@ -222,9 +221,14 @@ class IHP {
     static drawLines = false;
     static maxCoord = 500;
     static lastRaycast = [[0,0,0],[0,0,0], false];
+    static simulationDistance = 50; // hitboxes with their center outside of the distance but some part of them inside will not be simulated
+                                    // this can cause problems for large hitboxes
+                                    // additionally if the simulationCenter moves very fast then the kinematics may not be regenerated in time
+                                    // so some collisions may not happen
+    static simulationCenter = [0,0,0];
 
     static init() {
-        setInterval(regenerateKinematics, 1000);
+        setInterval(IHP.regenerateKinematics, 1000);
     }
 
     static regenerateKinematics() {
@@ -234,6 +238,7 @@ class IHP {
         for (var p of physicsObjects) {
             i++;
             if (!p.kinematic) continue;
+            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance) {continue;}
             var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
             var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
             var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
@@ -300,6 +305,7 @@ class IHP {
         for (var p of physicsObjects) {
             i++;
             if (p.kinematic) continue;
+            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance) {continue;}
             var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
             var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
             var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;

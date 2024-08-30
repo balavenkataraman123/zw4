@@ -253,6 +253,7 @@ uniform mat4 uProjectionMatrix;
 
 varying highp vec2 texCoord;
 varying lowp float size;
+varying vec3 vPosition;
 
 void main() {
 	if (
@@ -277,6 +278,7 @@ void main() {
 	gl_Position = uProjectionMatrix * uModelViewMatrix * position;
 	texCoord = aParticleTexCoords;
 	size = (aLifetime - time) / aLifetime;
+	vPosition = (uModelViewMatrix * position).xyz;
 }
 `;//uModelViewMatrix[0].y, uModelViewMatrix[1].y, uModelViewMatrix[2].y
 const realBillboardVS = /*lmao*/`
@@ -308,13 +310,18 @@ const particleFS = `
 precision mediump float;
 varying highp vec2 texCoord;
 varying highp vec3 vLighting;
+varying vec3 vPosition;
 uniform sampler2D uSampler;
+uniform float uFogAmount;
+uniform vec4 uFogColor;
 varying lowp float size;
 
 void main() {
 	if (gl_FragCoord.z < 0.0) {discard;}
 	lowp vec4 col = texture2D(uSampler, texCoord);
 	col.a *= size;
+	float fogAmount = length(vPosition) * 0.05 - 0.3;
+	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
 	if (col.a == 0.0) {
 		discard;
 	} else {

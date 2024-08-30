@@ -13,32 +13,147 @@ Array.prototype.alist = function(n) {
 
 var bullets = [], items = [], zombies = [];
 
+class SFXhandler {
+    static nowPlaying = [];
+    
+    static earPos = [0,0,0];
+    static categoryVolume = {
+        ambience: 1,
+        SFX: 1,
+        music: 1,
+        default: 1
+    };
+    static distanceDropoff(dist) {
+        // returns [0, 1] depending on distance
+        return Math.max(0, Math.pow(0.9, dist));
+    }
+    static newSound(url, _pos, volume, category, ambient = false, loop = false) {
+        // ambient = it is played at full volume regardless of where you are at
+        if (!this.categoryVolume[category]) {
+            category = "default";
+        }
+        var pos = [_pos[0], _pos[1], _pos[2]]; // copy it
+        let toPush = {
+            url: url, pos: pos, volume: volume, category: category, ambient: ambient, loop: loop,
+            obj: new Audio(url)
+        };
+        toPush.obj.loop = loop;
+        toPush.obj.volume = volume * this.categoryVolume[category] * this.distanceDropoff(glMatrix.vec3.dist(pos, this.earPos));
+        if (ambient) {toPush.obj.volume = volume * this.categoryVolume[category];}
+        toPush.obj.play();
+        if (!loop) toPush.obj.addEventListener("ended", function() {toPush.removed = true;});
+        this.nowPlaying.push(toPush);
+    }
+    static update() {
+        this.nowPlaying = this.nowPlaying.filter(p=>!p.removed);
+        for (var s of this.nowPlaying) {
+            s.obj.volume = s.volume * this.categoryVolume[s.category] * this.distanceDropoff(glMatrix.vec3.dist(s.pos, this.earPos));
+            if (s.ambient) {s.obj.volume = s.volume * this.categoryVolume[s.category];}
+        }
+    }
+}
+
+class GUIeffects {
+    // like the hit markers, the little numbers that appear when you do damage etc
+    static effects = [];
+    static update(dt) {
+        // presumably dt in ms
+        GUIeffects.effects = GUIeffects.effects.filter((e)=>e.timeRemaining>0);
+        for (var e of GUIeffects.effects) {
+            e.timeRemaining -= dt/1000;
+            glMatrix.vec3.add(e.velocity, e.velocity, glMatrix.vec2.scale([0,0], e.gravity, dt/1000));
+            glMatrix.vec2.add(e.pos, e.pos, glMatrix.vec2.scale([0,0], e.velocity, dt/1000));
+        }
+    }
+    static render() {
+        for (var e of GUIeffects.effects) {
+            oCtx.globalAlpha = Math.max(0, e.timeRemaining/e.fadeTime);
+            oCtx.save();
+            oCtx.translate(e.pos[0], e.pos[1]);
+            oCtx.rotate(e.angle);
+            if (e.text) {
+                oCtx.font = e.fontsize + "px Impact";
+                oCtx.fillStyle = e.fillColor;
+                oCtx.fillText(e.text, 0, 0);
+                oCtx.strokeStyle = e.strokeColor;
+                oCtx.strokeWidth = e.strokeWidth;
+                oCtx.strokeText(e.text, 0, 0);
+            } else {
+                var w = e.width;
+                var h = e.image.height * e.width / e.image.width;
+                oCtx.drawImage(e.image, -w/2, -h/2, w, h);
+            }
+            oCtx.restore();
+        }
+        oCtx.globalAlpha = 1;
+    }
+    static newTextEffect(text, fontsize, fillColor, strokeColor, strokeWidth, fadeTime, startPos, velocity, gravity, angle=0) {
+        // velocity is in pixels/s and gravity in pixels s^-2
+        // fadeTime in seconds
+        GUIeffects.effects.push({
+            image: null,
+            text: text, fontsize: fontsize, fillColor: fillColor, strokeColor: strokeColor, strokeWidth: strokeWidth, fadeTime: fadeTime, velocity: velocity, gravity: gravity,
+            timeRemaining: fadeTime, pos: startPos,
+            angle: angle
+        });
+    }
+    static newImageEffect(image, width, fadeTime, startPos, velocity, gravity, angle=0) {
+        // velocity is in pixels/s and gravity in pixels s^-2
+        // fadeTime in seconds
+        GUIeffects.effects.push({
+            image: image, text: null,
+            width: width, fadeTime: fadeTime, velocity: velocity, gravity: gravity,
+            timeRemaining: fadeTime, pos: startPos,
+            angle: angle
+        });
+    }
+}
+
+class Cartridge extends PhysicsObject {
+    // an ejected cartridge. updates and everything are handled through Gun.
+    constructor(pos, model, angleY) {
+        super(pos[0], pos[1], pos[2], 0.1, 0.1, 0.1, false, false, true);
+        this.model = model; this.angleY = angleY;
+        this.angleX = 0;
+    }
+    onCollision(o, n) {
+        if (o.isBullet) {return;}
+        this.removed = true;
+    }
+}
+
 class Gun {
     static addresses = {};
     static muzzleFlashes = [];
     static flashTexCoords = [];
     static muzzleFlashAddress;
+    static muzzleFlashColor = [0.17, 0.17, 0.05];
+    static cartridgeAddress;
+    static cartridges = [];
     static init() {
+        // muzzle flash
         var texCycle = [0, 1,
             1, 1,
             1, 0,
             0, 1,
             1, 0,
-            0, 0]; // for the muzzle flash
-        for (var i=0; i<texCycle.length; i++) {
-            texCycle[i] *= 128/texW;
-        }
+            0, 0];
         for (var x=0; x<2; x++) {
             for (var y=0; y<3; y++) {
                 var toPush = [];
                 for (var i=0; i<texCycle.length; i+=2) {
-                    toPush.push(texCycle[i] + 128/texW*x);
-                    toPush.push(texCycle[i+1] + (1664+128*y)/texW);
+                    toPush.push(texCycle[i]*128/texW + 128/texW * x);
+                    toPush.push(texCycle[i+1]*128/texH + 1664/texH + y*128/texH);
                 }
-                this.flashTexCoords.push(toPush);
+                Gun.flashTexCoords.push(toPush);
             }
         }
         Gun.muzzleFlashAddress = createRenderBuffer("billboardShader");
+
+        // cartridge ejection
+        Gun.cartridgeAddress = createRenderBuffer("transformShader");
+
+        // guns
         for (var name in gunSpecs) {
             Gun.addresses[name] = createRenderBuffer("objShader");
             var model = models["gun_" + name];
@@ -56,11 +171,13 @@ class Gun {
         this.model = models["gun_" + name];
         this.firingDelay = 0;
         this.roundsRemaining = 0;
-        this.reloadRemaining = this.specs.reloadTime;
+        this.reloadRemaining = 0;
         this.type = "gun";
         this.currentRecoil = 0;
+        this.pos = [0,0,0];
     }
-    update(dt, focused) {
+    update(dt, focused, pos) {
+        this.pos = pos;
         if (focused) {
             // if the player is selecting this gun, then we can reload
             var oldRR = this.reloadRemaining;
@@ -73,7 +190,7 @@ class Gun {
         this.firingDelay -= dt;
         if (this.roundsRemaining == 0 && this.reloadRemaining < 0) {
             this.reloadRemaining = this.specs.reloadTime; // we need to reload
-            new Audio("./static/zw4/sfx/reload.mp3").play();
+            SFXhandler.newSound("./static/zw4/sfx/reload.mp3", this.pos, 1, "SFX", false);
         }
         this.currentRecoil *= 0.8;
     }
@@ -104,8 +221,22 @@ class Gun {
     }
     static update(dt) {
         Gun.muzzleFlashes = Gun.muzzleFlashes.filter((x)=>x.framesLeft>0);
+        Gun.cartridges = Gun.cartridges.filter((x)=>!x.removed);
+        for (var c of Gun.cartridges) {
+            if (glMatrix.vec3.dist(player.pos, c.pos) > Bullet.maxDist) {
+                c.removed = true;
+            }
+        }
+        var maxBrightness = 0;
+        for (var f of Gun.muzzleFlashes) {
+            maxBrightness = Math.max(maxBrightness, f.brightness);
+        }
+        lightingInfo[6] += Gun.muzzleFlashColor[0] * maxBrightness;
+        lightingInfo[7] += Gun.muzzleFlashColor[1] * maxBrightness;
+        lightingInfo[8] += Gun.muzzleFlashColor[2] * maxBrightness;
     }
     static render() {
+        // muzzle flash
         var datas = getRBdata(Gun.muzzleFlashAddress, "billboardShader");
         for (var prop in datas) {datas[prop] = [];}
         for (var m of Gun.muzzleFlashes) {
@@ -126,7 +257,7 @@ class Gun {
                     cycle[a] *= m.size;
                     cycle[a+1] *= m.size;
                 }
-                quickConcat(datas.aTexCoord, Gun.flashTexCoords[0]);
+                quickConcat(datas.aTexCoord, Gun.flashTexCoords[Math.floor(Math.random() * 6)]);
                 quickConcat(datas.aCorner, cycle);
                 quickConcat(datas.aCenterOffset, mList(m.pos, 6));
             }
@@ -135,15 +266,42 @@ class Gun {
         flushRB(Gun.muzzleFlashAddress, "billboardShader");
         gl.useProgram(buffers_d.billboardShader.compiled);
         useRenderBuffer(Gun.muzzleFlashAddress, "billboardShader");
+        gl.uniformMatrix3fv(buffers_d.billboardShader.uniform.uLightingInfo, false, [1,1,1,1,1,1,1,1,1]); // make it bright for muzzle flash
         gl.drawArrays(gl.TRIANGLES, 0, datas.aCorner.length/3);
+        gl.uniformMatrix3fv(buffers_d.billboardShader.uniform.uLightingInfo, false, lightingInfo);
+
+        // cartridges
+        var datas = getRBdata(Gun.cartridgeAddress, "transformShader");
+        for (var prop in datas) {datas[prop] = [];}
+        for (var c of Gun.cartridges) {
+            quickConcat(datas.aVertexPosition, models[c.model].position);
+            quickConcat(datas.aVertexNormal, models[c.model].normal);
+            quickConcat(datas.aColor, models[c.model].color);
+            quickConcat(datas.aTranslation, mList(c.pos, models[c.model].position.length/3));
+            quickConcat(datas.aYRot, mList([c.angleY], models[c.model].position.length/3));
+            quickConcat(datas.aXRot, mList([c.angleX], models[c.model].position.length/3));
+        }
+        flushRB(Gun.cartridgeAddress, "transformShader");
+        gl.useProgram(buffers_d.transformShader.compiled);
+        useRenderBuffer(Gun.cartridgeAddress, "transformShader");
+        gl.drawArrays(gl.TRIANGLES, 0, datas.aVertexPosition.length/3);
     }
-    static muzzleFlash(pos, size, numParticles) {
+    static muzzleFlash(pos, size, numParticles, brightness) {
+        // note: brightness doesn't affect the brightness of the actual flash
+        // it is for how much the flash affects the global lighting
         Gun.muzzleFlashes.push({
             pos: pos,
             size: size,
             numParticles: numParticles,
-            framesLeft: 4
+            framesLeft: 2,
+            brightness: brightness
         });
+    }
+    static ejectCartridge(pos, model, angleY) {
+        var toPush = new Cartridge(pos, model, angleY);
+        Gun.cartridges.push(toPush);
+        glMatrix.vec3.rotateY(toPush.vel, [0, 1 + Math.random() * 0.3, -1 + Math.random() * 0.3], [0,0,0], angleY);
+        toPush.ignores = new Set(["Player", "Cartridge"]);
     }
 }
 
@@ -158,6 +316,7 @@ class NothingGun { // basically an empty inv slot
 }
 
 class Item extends PhysicsObject {
+    // TODO: add render distance and simulation distance bounds
     constructor(x, y, z, thing, type, add = true) {
         super(x, y, z, 0.2, 0.2, 0.2, false, true, true);
         this.type = type;
@@ -224,18 +383,20 @@ class Item extends PhysicsObject {
 }
 
 class Bullet {
+    // note: bullets don't have render distance and simulation distance and stuff because they travel very fast and are removed at maxDist from the player anyways
     static address;
-    static maxDist = 50; // max distance from origin before bullets are deleted
+    static maxDist = 50; // max distance from player before bullets are deleted
     static init() {
         this.address = createRenderBuffer("transformShader");
     }
-    constructor(color, pos, front, yaw, pitch, width, length, speed, damage, numBoxes, add = true) {
+    constructor(color, pos, front, yaw, pitch, width, length, speed, damage, numBoxes, add = true, velOffset = [0,0,0]) {
         this.color = color; this.width = width; this.maxLength = length; this.speed = speed;
         this.front = new Float32Array(front); this.yaw = yaw; this.pitch = pitch;
         this.actualLength = 0;
         this.hitboxes = [];
         this.pos = pos;
         this.damage = damage;
+        this.velOffset = velOffset; // to give some velocity to the bullet so if the player is falling while firing, the bullet falls as well
         let bul = this, dmg = damage; // create a function closure
         for (var i=0; i<numBoxes; i++) {
             this.hitboxes.push(new PhysicsObject(pos[0], pos[1], pos[2], width, width, width, false, true, true));
@@ -246,8 +407,10 @@ class Bullet {
                 }
                 bul.removed = true;
                 if (o.takeDamage) {
-                    o.takeDamage(dmg);
+                    o.takeDamage(dmg, bul);
                 }
+                // particles
+                particles.push(new ParticleSystem(bul.pos, D_ONE_POINT(), 3, 0.6, [2000/TEXW,100/TEXH], 0, 0.1, 5, 200, 1));
             }};
         }
         if (add) {
@@ -267,6 +430,7 @@ class Bullet {
             var scaledFront = glMatrix.vec3.create();
             glMatrix.vec3.scale(scaledFront, bul.front, bul.speed * dt / 1000);
             glMatrix.vec3.add(bul.pos, bul.pos, scaledFront);
+            glMatrix.vec3.add(bul.pos, bul.pos, glMatrix.vec3.scale([0,0,0], bul.velOffset, dt / 1000));
             bul.actualLength += bul.speed * dt / 1000;
             bul.actualLength = Math.min(bul.actualLength, bul.maxLength);
             if (glMatrix.vec3.distance(player.cameraPos, bul.pos) > Bullet.maxDist) {
@@ -300,17 +464,18 @@ class Bullet {
             obj.aTranslation.push(this.pos[0]); obj.aTranslation.push(this.pos[1]); obj.aTranslation.push(this.pos[2]);
         }
     }
-    static fireBullet(pos, yaw, pitch, spread, color, width, length, speed, damage, numBoxes) {
+    static fireBullet(pos, yaw, pitch, spread, color, width, length, speed, damage, numBoxes, velOffset = [0,0,0]) {
         var adjYaw = yaw + (Math.random() * 2 - 1) * spread;
         var adjPitch = pitch + (Math.random() * 2 - 1) * spread;
         var rotatedFront = glMatrix.vec3.create();
         rotatedFront[0] = Math.cos(glMatrix.glMatrix.toRadian(adjYaw)) * Math.cos(glMatrix.glMatrix.toRadian(adjPitch));
         rotatedFront[1] = Math.sin(glMatrix.glMatrix.toRadian(adjPitch));
         rotatedFront[2] = Math.sin(glMatrix.glMatrix.toRadian(adjYaw)) * Math.cos(glMatrix.glMatrix.toRadian(adjPitch));
+
         return new Bullet(color, pos,
             rotatedFront, adjYaw,
             adjPitch, width,
-            length, speed, damage, numBoxes, true);
+            length, speed, damage, numBoxes, true, velOffset);
     }
 }
 
@@ -342,13 +507,12 @@ class Zombie extends PhysicsObject {
         this.aggroHitbox.collidesWith.add("Player");
         let zo = this; // generate a closure for the onCollision function
         this.aggroHitbox.onCollision = function(o, normal) {
-            if (o == player && !zo.aggroed) {
+            if (o == player && !zo.aggroed && !zo.removed) {
                 zo.aggroed = true;
-                if (Math.random() < 0.5 || true) {
-                    setTimeout(function() {
-                        new Audio("./static/zw4/sfx/ambient_" + (Math.floor(Math.random() * 6)+1) + ".mp3").play();
-                    }, Math.random() * 2000 + 500);
-                }
+                SFXhandler.newSound("./static/zw4/sfx/angry_" + zo.type + "_" + Math.floor(Math.random() * zo.specs.aggroSoundCount+1) + ".mp3", zo.pos, 1, "SFX", false, false);
+                zo.aggroSoundsInterval = setInterval(function() {
+                    SFXhandler.newSound("./static/zw4/sfx/angry_" + zo.type + "_" + Math.floor(Math.random() * zo.specs.aggroSoundCount+1) + ".mp3", zo.pos, 1, "SFX", false, false);
+                }, 5000);
             }
         }
 
@@ -372,15 +536,20 @@ class Zombie extends PhysicsObject {
             zomb.frameNum += 0.03 * dt;
             zomb.vel[1] = 0; zomb.pos[1] = 2.5;
 
+            var dist = glMatrix.vec3.dist(zomb.pos, player.pos);
+            if (dist > levelSpecs[currentLevel.levelNum].simulationDistance) {
+                continue;
+            }
+
             var bulletPos = glMatrix.vec3.create(); // get the zombie's shooting position
             glMatrix.vec3.add(bulletPos, zomb.pos, zomb.specs.firePos);
             glMatrix.vec3.add(bulletPos, bulletPos, [0, -zomb.dy, 0]); // since firePos is relative to the zombie's feet but zomb.pos is the zombie's center
 
             // compute yaw and pitch based on the shooting position
             zomb.yaw = Math.atan2((player.pos[2] - zomb.pos[2]), (player.pos[0] - zomb.pos[0])) * 180 / Math.PI;
-            var dist = Math.sqrt(Math.pow(player.pos[0]-zomb.pos[0], 2) + Math.pow(player.pos[2]-zomb.pos[2], 2));
+            var xzdist = Math.sqrt(Math.pow(player.pos[0]-zomb.pos[0], 2) + Math.pow(player.pos[2]-zomb.pos[2], 2));
             zomb.pitch = Math.atan2(player.pos[1] - zomb.pos[1],
-                dist) * 180 / Math.PI;
+                xzdist) * 180 / Math.PI;
             // aigh now we adjust it don't ask why
             // zomb.yaw -= Math.atan2(zomb.specs.firePos[2], dist) * 180 / Math.PI;
             // zomb.pitch -= 16 * Math.pow(0.93, dist);
@@ -394,13 +563,13 @@ class Zombie extends PhysicsObject {
                 glMatrix.vec3.add(zomb.pos, zomb.pos, glMatrix.vec3.scale([0, 0, 0],
                     zomb.pathfinder.update(dt, zomb.pos, zomb.id), zombieSpecs[zomb.type].speed * dt/1000));
                 // fire
-                zomb.gun.update(dt, true);
+                zomb.gun.update(dt, true, zomb.pos);
                 var sp = zomb.gun.specs;
 
                 // burst fire
                 if (zomb.burstRoundsRemaining > 0 && zomb.gun.canShoot()) {
                     zomb.burstRoundsRemaining--;
-                    new Audio("./static/zw4/sfx/fire.mp3").play();
+                    SFXhandler.newSound("./static/zw4/sfx/fire.mp3", zomb.pos, 1, "SFX", false);
                     // now we rotate bulletPos around the zombie's feet
                     // basically, since the zombie's model was rotated around its feet, we need to rotate bulletPos around the feet too
                     glMatrix.vec3.rotateZ(bulletPos, bulletPos, [zomb.pos[0], zomb.pos[1] - zomb.dy, zomb.pos[2]], glMatrix.glMatrix.toRadian(zomb.pitch));
@@ -408,7 +577,10 @@ class Zombie extends PhysicsObject {
 
                     var bul = Bullet.fireBullet(bulletPos, zomb.yaw, zomb.pitch,
                         sp.spread, sp.bulletColor, sp.bulletWidth, sp.bulletLength, sp.bulletSpeed, sp.damage, 5);
-                    Gun.muzzleFlash(bulletPos, 0.75, 3);
+                    
+                    if (dist < Player.seeMuzzleflashDistance) {
+                        Gun.muzzleFlash(bulletPos, 0.75, 3, dist/Player.seeMuzzleflashDistance);
+                    }
                     for (var hb of bul.hitboxes) {
                         hb.ignores.add("Zombie"); // so the zombies don't kill themselves by firing
                     }
@@ -427,7 +599,17 @@ class Zombie extends PhysicsObject {
             this.removed = true;
             player.health += 25;
             player.health = Math.min(player.health, 100);
+            for (var p of this.specs.deathParticles) {
+                particles.push(new ParticleSystem(this.pos, D_ONE_POINT(), -4, 0.5, p.texCoordStart, p.texCoordWidth, 0.3, 3, 10000, 1));
+            }
+            GUIeffects.newTextEffect("+25 HP", 150, "white", "black", 25, 1, [oW * 0.5+90, oH * 0.3], [0,0], [0,0]);
+            clearInterval(this.aggroSoundsInterval);
         }
+        // hit marker
+        GUIeffects.newImageEffect(oTex.hitMarker, oW * 0.1, 1, [oW * 0.5, oH * 0.5], [0, 0], [0, 0]);
+
+        // number thingy
+        GUIeffects.newTextEffect(amt, 50, "red", "yellow", 25, 1, [oW * 0.5, oH * 0.5], [400 + 400 * Math.random(), -1000 - 400 * Math.random()], [0, 4000]);
     }
     render() {
         this.anim.frameNum = Math.floor(this.frameNum) % 30 + 1;
@@ -440,12 +622,22 @@ class Zombie extends PhysicsObject {
     }
     static renderAll() {
         for (var zomb of zombies) {
+            var dist = glMatrix.vec3.dist(zomb.pos, player.pos);
+            if (dist > levelSpecs[currentLevel.levelNum].renderDistance) {
+                continue;
+            }
             zomb.render();
         }
     }
 }
 
+function angleBetweenVectors(a, b) {
+    // little helper function
+    return Math.atan2(a[1] * b[0] - a[0] * b[1], a[0] * b[0] + a[1] * b[1]);
+}
+
 class Player extends PhysicsObject {
+    static seeMuzzleflashDistance = 20;
     constructor() {
         super(0, 3, 0, 0.2, 0.85, 0.2, false, false, true);
         this.cameraFront = glMatrix.vec3.fromValues(0, 4, 0);
@@ -501,8 +693,14 @@ class Player extends PhysicsObject {
     jump() {
         this.vel[1] += this.jumpPower;
     }
-    takeDamage(dmg) {
+    takeDamage(dmg, source = null) {
         this.health -= dmg;
+        if (source?.constructor?.name == "Bullet") {
+            GUIeffects.newImageEffect(oTex.damageMarker, oW * 0.3, 1, [oW * 0.5, oH * 0.5], [0,0], [0,0], Math.PI+angleBetweenVectors(
+                [source.front[0], source.front[2]],
+                [player.cameraFront[0], player.cameraFront[2]]
+            ));
+        }
     }
     onCollision(obj, normal) {
         if (normal == "y" && obj.pos[1] < this.pos[1] && divisDownKeys["Space"]) {
@@ -511,9 +709,57 @@ class Player extends PhysicsObject {
     }
 }
 
+class ParticleEffects {
+    static chunkSize = 10;
+    static playerLastChunk = [-69, -69];
+    constructor(levelNum) {
+        this.levelNum = levelNum;
+        this.particleSystemArgs = []; // the arguments to pass to the ParticleSystem constructor
+        for (var sp of levelSpecs[levelNum].particles) {
+            this.particleSystemArgs.push([D_PLANE(ParticleEffects.chunkSize, ParticleEffects.chunkSize), sp.velocity, sp.lifetime, sp.texCoordStart, sp.texCoordWidth, sp.size, sp.intensity, Infinity, 6942000]);
+        }
+        this.particleSystems = {};
+    }
+    update() {
+        // so basically how this works is the world is split into chunks
+        // then particles are rendered in the 3x3 square of chunks surrounding the player
+        // like rain in minecraft
+        var currentChunk = [Math.floor(player.pos[0] / ParticleEffects.chunkSize), Math.floor(player.pos[2] / ParticleEffects.chunkSize)];
+        if (currentChunk[0] != ParticleEffects.playerLastChunk[0] || currentChunk[1] != ParticleEffects.playerLastChunk[1]) {
+            ParticleEffects.playerLastChunk = [currentChunk[0], currentChunk[1]];
+            for (var prop in this.particleSystems) {
+                this.particleSystems[prop].needed = false; // the ones that are not needed are removed
+            }
+            for (var dx=-1; dx<=1; dx++) {
+                for (var dy=-1; dy<=1; dy++) {
+                    var neededChunk = [currentChunk[0] + dx, currentChunk[1] + dy];
+
+                    // so first we will see if we have a ParticleSystem for the needed chunk already in the this.particleSystems
+                    if (!this.particleSystems[neededChunk]) {
+                        this.particleSystems[neededChunk] = new ParticleSystem(
+                            [neededChunk[0] * ParticleEffects.chunkSize - ParticleEffects.chunkSize/2, player.pos[1] + 1.3 ,neededChunk[1] * ParticleEffects.chunkSize - ParticleEffects.chunkSize/2],
+                            ...this.particleSystemArgs[Math.floor(Math.random() * this.particleSystemArgs.length)]
+                        );
+                        particles.push(this.particleSystems[neededChunk]);
+                        this.particleSystems[neededChunk].needed = true;
+                    } else {this.particleSystems[neededChunk].needed = true;}
+                }
+            }
+            for (var prop in this.particleSystems) {
+                if (!this.particleSystems[prop].needed) {
+                    this.particleSystems[prop].removed = true;
+                    delete this.particleSystems[prop];
+                }
+            }
+            updateParticleBuffers();
+        }
+    }
+}
+
 class Level {
-    constructor(data) {
+    constructor(data, levelNum) {
         this.data = data;
+        this.levelNum = levelNum;
     }
     load() {
         // adds all the data to the physicsObjects array, the shader buffers, etc
@@ -533,5 +779,11 @@ class Level {
         }
     
         player.genPathfindingMesh();
+
+        this.particleEffect = new ParticleEffects(1); // hardcode level number for now
+
+        IHP.simulationDistance = levelSpecs[this.levelNum].simulationDistance;
+
+        SFXhandler.newSound(levelSpecs[this.levelNum].ambientSound, [0,0,0], 1, "ambience", true, true);
     }
 }

@@ -5,14 +5,14 @@ var mousepos = [0, 0];
 var debugDispNow = {}; var showDebug = true;
 var firstTime = 0;
 var oW, oH;
-var globalSkybox;
-var creativeMode = false;
+var globalSkybox, currentLevel;
+var creativeMode = true;
 var generalWorker;
 
 // creative mode interval
 setInterval(function() {
 	if (creativeMode) {
-		PhysicsObject.GlobalGravity[1] = 0;
+		// PhysicsObject.GlobalGravity[1] = 0;
 		if (window.player) {
 			player.health = 100;
 		}
@@ -92,6 +92,7 @@ function startGame() {
 	player = new Player();
 	Gun.init();
 	Bullet.init();
+	IHP.init();
 	PathfinderInterface.init();
 	oCtx.fillText("Loading...", 100, 100);
 	requestAnimationFrame(function(t) {firstTime = t;});
@@ -103,7 +104,8 @@ function startGame() {
 	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
 	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
 
-	new Level(models.level1).load();
+	currentLevel = new Level(models.level1, 1);
+	currentLevel.load();
 
 	menuSongAudioObject.pause();
 }
@@ -131,7 +133,7 @@ function mix(a, b, amount) {
 	return a * (1 - amount) + b * amount;
 }
 
-var __frameNum = 0, __ptime = 0, framesPassed = 0;;
+var __frameNum = 0, __ptime = 0, framesPassed = 0;
 
 function renderProgressCircle(msg, remaining, total) {
 	// renders a surviv-like progress circle
@@ -161,6 +163,8 @@ function gameLoop(_t) {
 	oCtx.clearRect(0, 0, oW, oH);
 	gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 	globalFogColor = glMatrix.vec4.fromValues(0, 0, 0, 0);
+	globalFogAmount = levelSpecs[currentLevel.levelNum].fogAmount;
+	lightingInfo = [...levelSpecs[currentLevel.levelNum].lighting.lightDirection, ...levelSpecs[currentLevel.levelNum].lighting.color, ...levelSpecs[currentLevel.levelNum].lighting.ambient];
 
 	__ptime = performance.now();
 	// movement
@@ -194,12 +198,33 @@ function gameLoop(_t) {
 	if (divisDownKeys["Digit3"]) {player.invIndex = 2;}
 	if (divisDownKeys["Digit4"]) {player.invIndex = 3;}
 
+	IHP.simulationCenter = player.pos;
+
+	// console.log("movement headers took " + (performance.now() - __ptime));
+	__ptime = performance.now();
+	
+
+	// updates
+	
+	IHP.physicsUpdate(dt, 16.666);
+	GUIeffects.update(dt);
+	// console.log("physics took " +  + (performance.now() - __ptime));
+	__ptime = performance.now();
+	player.update(dt);
+	Bullet.update(dt);
+	Item.update(dt);
+	Zombie.update(dt);
+	Gun.update(dt);
+	currentLevel.particleEffect.update();
+	SFXhandler.update();
+	SFXhandler.earPos = player.pos;
+	
 	// firing
 	if (player.selected.type == "gun") {
-		player.selected.update(dt, true);
+		player.selected.update(dt, true, player.pos);
 		if (mouseDown && player.selected.canShoot()) {
 			player.selected.recoil();
-			new Audio("./static/zw4/sfx/fire.mp3").play();
+			SFXhandler.newSound("./static/zw4/sfx/fire.mp3", [0,0,0], 1, "SFX", true);
 			var scaledFront = glMatrix.vec3.create();
 			var distanceFromPlayer = player.selected.specs.barrelLength;
 			var spawnPos = glMatrix.vec3.create();
@@ -208,25 +233,15 @@ function gameLoop(_t) {
 			Bullet.fireBullet(spawnPos, player.yaw, player.pitch,
 				player.selected.specs.spread, player.selected.specs.bulletColor,
 				player.selected.specs.bulletWidth, player.selected.specs.bulletLength,
-				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5);
-			Gun.muzzleFlash(spawnPos, 0.3, 5);
+				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5, [player.vel[0], player.vel[1], player.vel[2]]);
+			Gun.muzzleFlash(spawnPos, 0.3, 5, 1);
+			var cartridgeScaledFront = glMatrix.vec3.create(), cartridgePos = glMatrix.vec3.create();
+			glMatrix.vec3.scale(cartridgeScaledFront, player.cameraFront, player.selected.specs.ejectionDistance);
+			glMatrix.vec3.add(cartridgePos, player.cameraPos, cartridgeScaledFront);
+			Gun.ejectCartridge(cartridgePos, "cartridge_9x19", glMatrix.glMatrix.toRadian(-player.yaw));
 		}
 	}
-	// console.log("movement headers took " + (performance.now() - __ptime));
-	__ptime = performance.now();
-	
 
-	// updates
-	
-	IHP.physicsUpdate(dt, 16.666);
-	// console.log("physics took " +  + (performance.now() - __ptime));
-	__ptime = performance.now();
-	player.update(dt);
-	Bullet.update(dt);
-	Item.update(dt);
-	Zombie.update(dt);
-	Gun.update(dt);
-	
 	// console.log("player, bullets, items and zombies took "  + (performance.now() - __ptime));
 
 	// rendering
@@ -244,6 +259,8 @@ function gameLoop(_t) {
 
 	player.selected.render(mouseDown);
 
+	updateParticles(dt);
+
 	IHP.drawAllBoxes();
 	// player.pathfinder.renderGrid();
 
@@ -252,10 +269,9 @@ function gameLoop(_t) {
 	// GUI
 	__ptime = performance.now();
 	// crosshair
+	var crosshairSize = oW * 0.07;
 	if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
-		oCtx.fillStyle = "black";
-		oCtx.fillRect(oW * 0.5 - 20, oH * 0.5 - 2, 40, 4);
-		oCtx.fillRect(oW * 0.5 - 2, oH * 0.5 - 20, 4, 40);
+		oCtx.drawImage(oTex.crosshair, oW * 0.5-crosshairSize/2, oH * 0.5-crosshairSize/2, crosshairSize, crosshairSize);
 	}
 
 	// health bar
@@ -311,6 +327,9 @@ function gameLoop(_t) {
 		var y = i * oH * 0.1 + oH * 0.6;
 		oCtx.fillText(player.inv[i].name, oW * 0.98, y + oH * 0.07);
 	}
+
+	// effects
+	GUIeffects.render();
 
 	// reloading
 	if (player.selected.type == "gun" && player.selected.reloadRemaining > 0) {

@@ -139,6 +139,9 @@ var oTex = {
 	"inv": "INVENTORY.png",
 	"invPointer": "invselect.png",
     "grass": "grass.png",
+    "crosshair": "crosshair.svg",
+    "hitMarker": "hit crosshair.svg",
+    "damageMarker": "damage marker.svg"
 };
 
 var itemTexCoords = {
@@ -157,6 +160,7 @@ var objNames = {
     skybox: "skybox",
     gun_MP40: "mp40",
     "gun_MAC M10": "mac10",
+    cartridge_9x19: "9x19 cartridge"
 };
 
 var hbNames = {
