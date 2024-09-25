@@ -285,7 +285,7 @@ class IHP {
         var scaledGravity = glMatrix.vec3.create();
         glMatrix.vec3.scale(scaledGravity, PhysicsObject.GlobalGravity, dt/1000);
         for (var po of physicsObjects) {
-            if (!po.kinematic) {
+            if (!po.kinematic && !po.ignoresGravity) {
                 glMatrix.vec3.add(po.vel, po.vel, scaledGravity);
 				po.pos[0] += po.vel[0] * dt/1000; po.pos[1] += po.vel[1] * dt/1000; po.pos[2] += po.vel[2] * dt/1000;
 			}

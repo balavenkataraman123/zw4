@@ -2,7 +2,7 @@
 
 var canvas, player;
 var mousepos = [0, 0];
-var debugDispNow = {}; var showDebug = true;
+var debugDispNow = {}; var showDebug = false, showGUI = true;
 var firstTime = 0;
 var oW, oH;
 var globalSkybox, currentLevel;
@@ -12,7 +12,8 @@ var generalWorker;
 // creative mode interval
 setInterval(function() {
 	if (creativeMode) {
-		PhysicsObject.GlobalGravity[1] = 0;
+		// PhysicsObject.GlobalGravity[1] = 0;
+		if (player) player.ignoresGravity = true;
 		if (window.player) {
 			player.health = 100;
 		}
@@ -39,7 +40,7 @@ function debugUpdate() {
 		res += "<br>";
 	}
 	document.getElementById("debugStuff").innerHTML = res;
-	document.getElementById("debugStuff").style.display = showDebug?"block":"none";
+	document.getElementById("debugStuff").style.display = (showGUI && showDebug)?"block":"none";
 }
 setInterval(debugUpdate, 20);
 
@@ -47,6 +48,7 @@ setInterval(debugUpdate, 20);
 var assetsReady = function() {
 	console.log("all things loaded");
 	document.getElementById("startBtn").innerHTML = "Start!";
+	document.getElementById("startBtn").disabled = false;
 	noise.seed(6969);
 	// size the canvas
 	canvas.width = window.innerWidth;
@@ -84,7 +86,6 @@ var assetsReady = function() {
 
 function gameHelp() {
 	document.getElementById("helpDiv").style.display = "block";
-	document.getElementById("helpBtn").innerHTML = "How to Play (scroll down)";
 }
 
 function startGame() {
@@ -104,7 +105,7 @@ function startGame() {
 	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
 	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
 
-	currentLevel = new Level(models.level1, 1);
+	currentLevel = new Level(models.level2, 2);
 	currentLevel.load();
 
 	menuSongAudioObject.pause();
@@ -116,6 +117,7 @@ function ded(reason) {
 	document.getElementById("deadReason").innerHTML = reason;
 	running = false;
 	deadSong.play();
+	SFXhandler.stopAll();
 }
 
 function onCameraTurn(e) {
@@ -257,7 +259,9 @@ function gameLoop(_t) {
 	Zombie.renderAll();
 	Gun.render();
 
-	player.selected.render(mouseDown);
+	if (showGUI) {
+		player.selected.render(mouseDown);
+	}
 
 	updateParticles(dt);
 
@@ -267,80 +271,94 @@ function gameLoop(_t) {
 	// console.log("all rendering took "  + (performance.now() - __ptime));
 
 	// GUI
-	__ptime = performance.now();
-	// crosshair
-	var crosshairSize = oW * 0.07;
-	if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
-		oCtx.drawImage(oTex.crosshair, oW * 0.5-crosshairSize/2, oH * 0.5-crosshairSize/2, crosshairSize, crosshairSize);
-	}
+	if (showGUI) {
+		__ptime = performance.now();
+		// crosshair
+		var crosshairSize = oW * 0.07;
+		if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
+			oCtx.drawImage(oTex.crosshair, oW * 0.5-crosshairSize/2, oH * 0.5-crosshairSize/2, crosshairSize, crosshairSize);
+		}
 
-	// health bar
-	oCtx.strokeStyle = "lime";
-	oCtx.strokeRect(oW * 0.3, oH * 0.9, oW * 0.4, oH * 0.05);
-	var healthRatio = player.health / player.maxHealth;
-	if (healthRatio == 1) oCtx.fillStyle = "grey";
-	else if (healthRatio > 0.7) oCtx.fillStyle = "lightgrey";
-	else if (healthRatio > 0.4) oCtx.fillStyle = "pink";
-	else if (healthRatio > 0.25) oCtx.fillStyle = "purple";
-	else oCtx.fillStyle = "red";
-	oCtx.fillRect(oW * 0.3, oH * 0.9, oW * 0.4 * healthRatio, oH * 0.05);
-	if (healthRatio <= 0) {
-		return;
-	}
+		// health bar
+		oCtx.strokeStyle = "lime";
+		oCtx.strokeRect(oW * 0.3, oH * 0.9, oW * 0.4, oH * 0.05);
+		var healthRatio = player.health / player.maxHealth;
+		if (healthRatio == 1) oCtx.fillStyle = "grey";
+		else if (healthRatio > 0.7) oCtx.fillStyle = "lightgrey";
+		else if (healthRatio > 0.4) oCtx.fillStyle = "pink";
+		else if (healthRatio > 0.25) oCtx.fillStyle = "purple";
+		else oCtx.fillStyle = "red";
+		oCtx.fillRect(oW * 0.3, oH * 0.9, oW * 0.4 * healthRatio, oH * 0.05);
 
-	// ammo remaining
-	if (player.selected.name != "empty") {
+		// ammo remaining
+		if (player.selected.name != "empty") {
+			oCtx.fillStyle = "black";
+			oCtx.globalAlpha = 0.5;
+			oCtx.fillRect(oW * 0.46, oH * 0.8, oW * 0.08, oH * 0.07);
+			if (true) { // later, replace this with the ammo in the player's bag
+				oCtx.fillRect(oW * 0.55, oH * 0.82, oW * 0.05, oH * 0.05);
+			}
+			oCtx.globalAlpha = 1;
+			oCtx.textAlign = "center";
+			if (player.selected.roundsRemaining > 0) {
+				oCtx.fillStyle = "white";
+			} else {
+				oCtx.fillStyle = "red";
+			}
+			oCtx.font = "40px Impact";
+			oCtx.fillText(player.selected.roundsRemaining, oW * 0.5, oH * 0.85);
+			if (true) { // same here as ^^^
+				oCtx.font = "30px Impact";
+				oCtx.fillStyle = "white";
+				oCtx.fillText(100, oW * 0.575, oH * 0.86);
+			}
+		}
+
 		oCtx.fillStyle = "black";
 		oCtx.globalAlpha = 0.5;
-		oCtx.fillRect(oW * 0.46, oH * 0.8, oW * 0.08, oH * 0.07);
-		if (true) { // later, replace this with the ammo in the player's bag
-			oCtx.fillRect(oW * 0.55, oH * 0.82, oW * 0.05, oH * 0.05);
+		// inventory
+		for (var i=0; i<4; i++) {
+			var y = i * oH * 0.1 + oH * 0.6;
+			oCtx.fillRect(oW * 0.85, y, oW * 0.14, oH * 0.09);
 		}
+		oCtx.fillStyle = "white";
 		oCtx.globalAlpha = 1;
-		oCtx.textAlign = "center";
-		if (player.selected.roundsRemaining > 0) {
-			oCtx.fillStyle = "white";
-		} else {
-			oCtx.fillStyle = "red";
+		oCtx.font = (oH * 0.03) + "px Impact";
+		oCtx.textAlign = "right";
+		for (var i=0; i<4; i++) {
+			var y = i * oH * 0.1 + oH * 0.6;
+			oCtx.fillText(player.inv[i].name, oW * 0.98, y + oH * 0.07);
 		}
-		oCtx.font = "40px Impact";
-		oCtx.fillText(player.selected.roundsRemaining, oW * 0.5, oH * 0.85);
-		if (true) { // same here as ^^^
-			oCtx.font = "30px Impact";
-			oCtx.fillStyle = "white";
-			oCtx.fillText(100, oW * 0.575, oH * 0.86);
+
+		// zombies killed and timer (speedrun stuff)
+		oCtx.globalAlpha = 0.5;
+		oCtx.fillStyle = "black";
+		oCtx.fillRect(oW * 0.7, oH * 0.03, oW * 0.27, oH * 0.2);
+		oCtx.globalAlpha = 1.0;
+		oCtx.fillStyle = "white";
+		oCtx.textAlign = "left";
+		oCtx.font = "" + (oW * 0.02) + "px Impact";
+		oCtx.fillText("Zombies Killed: " + player.zombiesKilled, oW * 0.71, oH * 0.08);
+		oCtx.fillText("Time: " + Math.floor((_t - firstTime)/100)/10, oW * 0.71, oH * 0.15);
+
+		// effects
+		GUIeffects.render();
+
+		// reloading
+		if (player.selected.type == "gun" && player.selected.reloadRemaining > 0) {
+			renderProgressCircle("Reloading", player.selected.reloadRemaining, player.selected.specs.reloadTime);
 		}
 	}
 
-	oCtx.fillStyle = "black";
-	oCtx.globalAlpha = 0.5;
-	// inventory
-	for (var i=0; i<4; i++) {
-		var y = i * oH * 0.1 + oH * 0.6;
-		oCtx.fillRect(oW * 0.85, y, oW * 0.14, oH * 0.09);
-	}
-	oCtx.fillStyle = "white";
-	oCtx.globalAlpha = 1;
-	oCtx.font = (oH * 0.03) + "px Impact";
-	oCtx.textAlign = "right";
-	for (var i=0; i<4; i++) {
-		var y = i * oH * 0.1 + oH * 0.6;
-		oCtx.fillText(player.inv[i].name, oW * 0.98, y + oH * 0.07);
-	}
-
-	// effects
-	GUIeffects.render();
-
-	// reloading
-	if (player.selected.type == "gun" && player.selected.reloadRemaining > 0) {
-		renderProgressCircle("Reloading", player.selected.reloadRemaining, player.selected.specs.reloadTime);
+	if (player.health <= 0) {
+		return;
 	}
 
 	debugDispNow["hitboxes shown"] = IHP.drawLines;
 	debugDispNow["player yaw"] = player.yaw;
 	debugDispNow["player pitch"] = player.pitch;
 	debugDispNow["player pos"] = "(" + Math.round(player.pos[0] * 100)/100 + ", " + Math.round(player.pos[1] * 100)/100 + ", " + Math.round(player.pos[2] * 100)/100 + ")";
-	
+
 	if (framesPassed % 200 == 0) {
 		debugDispNow["frame time"] = performance.now() - _startTime;
 	}

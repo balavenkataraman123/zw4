@@ -51,6 +51,13 @@ class SFXhandler {
             if (s.ambient) {s.obj.volume = s.volume * this.categoryVolume[s.category];}
         }
     }
+    static stopAll() {
+        // stops all audio and prevents further playback (used when player is dead)
+        for (var a of SFXhandler.nowPlaying) {
+            a.obj.pause();
+        }
+        SFXhandler.newSound = function(){};
+    }
 }
 
 class GUIeffects {
@@ -401,6 +408,7 @@ class Bullet {
         for (var i=0; i<numBoxes; i++) {
             this.hitboxes.push(new PhysicsObject(pos[0], pos[1], pos[2], width, width, width, false, true, true));
             this.hitboxes[i].isBullet = true;
+            this.hitboxes[i].ignores.add("Cartridge"); // so they don't dissapear from the cartridges being ejected
             this.hitboxes[i].onCollision = function(o, n) {if (!o.isBullet && !bul.removed) {
                 for (var hb of bul.hitboxes) {
                     hb.removed = true;
@@ -604,6 +612,7 @@ class Zombie extends PhysicsObject {
             }
             GUIeffects.newTextEffect("+25 HP", 150, "white", "black", 25, 1, [oW * 0.5+90, oH * 0.3], [0,0], [0,0]);
             clearInterval(this.aggroSoundsInterval);
+            player.zombiesKilled++;
         }
         // hit marker
         GUIeffects.newImageEffect(oTex.hitMarker, oW * 0.1, 1, [oW * 0.5, oH * 0.5], [0, 0], [0, 0]);
@@ -657,6 +666,8 @@ class Player extends PhysicsObject {
         this.lastCenter = [-69, -69, -69];
         PathfinderInterface.sendPhysicsObjects();
         PathfinderInterface.genGrid(0.5, 0.7, 3, 4, [this.pos[0], this.pos[1], this.pos[2]]);
+
+        this.zombiesKilled = 0;
     }
     genPathfindingMesh() {
         PathfinderInterface.sendPhysicsObjects();
@@ -682,6 +693,9 @@ class Player extends PhysicsObject {
         // altitude damage
         if (this.pos[1] < -100 || this.pos[1] > 100) {
             this.health -= 30 * dt/1000;
+            if (this.health <= 0) {
+                ded("Player fell off the map.");
+            }
         }
 
         // if the player strayed too far from the last grid center, generate a new pathfinding mesh
@@ -700,6 +714,9 @@ class Player extends PhysicsObject {
                 [source.front[0], source.front[2]],
                 [player.cameraFront[0], player.cameraFront[2]]
             ));
+            if (this.health <= 0) {
+                ded("Player was shot to death.");
+            }
         }
     }
     onCollision(obj, normal) {
@@ -712,6 +729,8 @@ class Player extends PhysicsObject {
 class ParticleEffects {
     static chunkSize = 10;
     static playerLastChunk = [-69, -69];
+    static chunkDx = 4; // how many chunks the particles extend past the player
+                        // because the particles take time to appear so if they extend past more then it may be better
     constructor(levelNum) {
         this.levelNum = levelNum;
         this.particleSystemArgs = []; // the arguments to pass to the ParticleSystem constructor
@@ -730,8 +749,8 @@ class ParticleEffects {
             for (var prop in this.particleSystems) {
                 this.particleSystems[prop].needed = false; // the ones that are not needed are removed
             }
-            for (var dx=-1; dx<=1; dx++) {
-                for (var dy=-1; dy<=1; dy++) {
+            for (var dx=-ParticleEffects.chunkDx; dx<=ParticleEffects.chunkDx; dx++) {
+                for (var dy=-ParticleEffects.chunkDx; dy<=ParticleEffects.chunkDx; dy++) {
                     var neededChunk = [currentChunk[0] + dx, currentChunk[1] + dy];
 
                     // so first we will see if we have a ParticleSystem for the needed chunk already in the this.particleSystems
@@ -763,6 +782,7 @@ class Level {
     }
     load() {
         // adds all the data to the physicsObjects array, the shader buffers, etc
+        bindTexture(loadTexture("./static/zw4/gltf/"+levelSpecs[this.levelNum].texAtlas + "?rand_num="+Math.random()), 0);
         shaderAddData({
             aVertexPosition: this.data.position,
             aVertexNormal: this.data.normal,

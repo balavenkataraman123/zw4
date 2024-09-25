@@ -12,8 +12,8 @@ function onKeyDown(event) {
 		if (keyCode == "KeyB") {
 			IHP.drawLines = !IHP.drawLines;
 		}
-		if (keyCode == "KeyP") {
-			BasicDijkstra.debugMode = !BasicDijkstra.debugMode;
+		if (keyCode == "KeyG") {
+			showGUI = !showGUI;
 		}
 	}
 }

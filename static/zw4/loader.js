@@ -117,8 +117,10 @@ function loadMapFromObj(url, mtlUrl, callback) {
                     res.position = res.position.concat(geom.data.position);
                     res.normal = res.normal.concat(geom.data.normal);
                     res.texCoord = res.texCoord.concat(geom.data.texcoord);
+                    try {
                     res.color = res.color.concat(
-                        mList(materials[geom.material].diffuseColor.concat([1.0]),geom.data.position.length/3));
+                        mList(materials[geom.material].diffuseColor.concat([1.0]),geom.data.position.length/3));}
+                        catch (e) {console.log(geom);}
                     // we don't use any of the mtl specs except for the diffuse color cuz yeah
                 }
 			}
@@ -131,7 +133,7 @@ function loadMapFromObj(url, mtlUrl, callback) {
 	});
 }
 
-bindTexture(loadTexture("./static/zw4/gltf/grass.png?rand_num="+Math.random()), 0);
+// bindTexture(loadTexture("./static/zw4/gltf/grass.png?rand_num="+Math.random()), 0);
 
 var models = {nothing: {position: [], color: [], normal: [], texCoord: []}};
 var animators = {"zomb_Awajiba": false};
@@ -168,7 +170,8 @@ var hbNames = {
 };
 
 var levelNames = {
-    level1: "buildingobj/level1"
+    level1: "buildingobj/level1",
+    level2: "buildingobj/level2"
 };
 
 var audios = {

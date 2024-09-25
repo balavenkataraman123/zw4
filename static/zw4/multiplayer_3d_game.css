@@ -11,15 +11,16 @@
 	top: 0;
 	width: 100%;
 	height: 100%;
-	background-image: url('/static/zw4/gltf/gui/menu.png');
+	background-image: url('/static/zw4/gltf/gui/bg.png');
 	background-size: cover;
 	background-position:center;
 }
 
 .homeDivInner {
 	position: absolute;
-	top: 30%;
+	top: 0;
 	width: 100%;
+	height: 100%;
 }
 
 #pauseDiv {display: none;}
@@ -30,17 +31,26 @@
 	font-size: 2rem;
 }
 #startBtn {
-	font-family: "Ubuntu";
+	font-family: "Teko";
 	font-size: 3rem;
-	padding: 5% 10%;
-	background-color: crimson;
-	color: beige;
+	font-weight: bold;
+	background-color: #ff6100;
+	color: white;
 	border: none;
+	position: absolute;
+	width: 30%;
+	height: 20%;
+	left: 35%;
+	top: 45%;
 }
 #helpBtn {
-	font-family: "Open Sans";
-	background-color: darkred;
-	color: beige;
+	position: absolute;
+	top: 65%;
+	left: 35%;
+	width: 30%;
+	font-family: "Teko";
+	background-color: grey;
+	color: white;
 	transition-duration: 0.5s;
 	padding: 0.5% 1%;
 	font-size: 2rem;
@@ -56,12 +66,40 @@
 	width: 30%;
 }
 
+#bannerimg {
+	position: absolute;
+	width: 60%;
+	left: 20%;
+}
+
 #helpDiv {
 	background-color: white;
-	width: 30%;
-	height: 150px;
 	overflow: scroll;
 	overflow-y: scroll;
+	position: absolute;
+	left: 35%;
+	top: 75%;
+	width: 30%;
+	height: 20%;
+}
+
+#changelog {
+	position: absolute;
+	width: 24%;
+	height: 40%;
+	background-color: #00000088;
+	left: 67%;
+	top: 45%;
+	border: 3px solid #ff6100;
+}
+
+h3 {
+	font-family: "Teko";
+	color: #ff6100;
+	font-size: 2rem;
+	margin-bottom: 0;
+	padding-bottom: 0; /*idk man things are being wierd in the changelog */
+	margin-top: 1rem;
 }
 
 h1 {
@@ -69,9 +107,15 @@ h1 {
 	font-size: 3rem;
 }
 
+/* since we did margin: 0 for *, this class allows us to override that so text looks better. */
+.add-margin-left {
+	margin-left: 0.5rem;
+}
+
 p, strong {
 	font-family: "Open Sans";
 	font-size: 1rem;
+	color: white;
 }
 #volumeButton {
     position: absolute;

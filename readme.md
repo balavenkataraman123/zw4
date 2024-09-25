@@ -79,9 +79,8 @@ the levels follow a progression from underground to the clouds and lastly a spac
 
 - Level 1: cave
   - grey theme with roof and walls surrounding all sides (but no bottom to allow for parkour)
-  - there are many chambers, and rickety bridges connecting them (like mineshafts in minecraft)
-  - zombies spawn in some chambers and you have to clear them out
-  - signs to make it very clear which chamber leads to the exit
+  - central catwalk thing to walk along (continuous so you could just rush straight through but there's not really enough room to strafe so you'd get gunned down quickly)
+  - 
 - Level 2: ravine
   - themed like a minecraft ravine, with narrow sides and again the rickety bridges
   - light pouring in from the top
@@ -170,3 +169,9 @@ since they don't cause any noticable blips in gameplay, "if it aint broke dont f
 - when a zombie's pathfinder needs a path, it sends a message to the pathfinder worker, then when the path is done generating the worker sends it back,
 and we will give each zombie an ID so we know which zombie it was meant for
 - we just won't worry about debug drawing the pathfinding mesh for now
+
+# Marketing
+Game colors will be orange and white
+Orange #ff6100 | white #FFFFFF
+Secondary colors are yellow and black in case we need more colors
+Yellow #ffd42d | black #000000

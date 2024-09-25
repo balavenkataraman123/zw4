@@ -35,7 +35,7 @@ var gunSpecs = {
 
 var zombieSpecs = {
     "Awajiba": {
-        speed: 8,
+        speed: 7,
         dx: 0.4, dy: 0.5, dz: 0.4,
         health: 30,
         gun: "MP40",
@@ -50,6 +50,8 @@ var zombieSpecs = {
     }
 };
 
+
+
 var levelSpecs = [undefined, // fill in 0th element
     {
         particles: [
@@ -59,13 +61,32 @@ var levelSpecs = [undefined, // fill in 0th element
             {texCoordStart: [832/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25}
         ],
         lighting: {
-            lightDirection: [0, 1, 0],
-            color: [0.5, 0.3, 0.3],
-            ambient: [0.5, 0.5, 0.6]
+            lightDirection: [0, -1, 0],
+            color: [0.6, 0.4, 0.4],
+            ambient: [0.6, 0.6, 0.55]
         },
         simulationDistance: 30,
         renderDistance: 40,
-        fogAmount: 1.0,
-        ambientSound: "./static/zw4/sfx/ambience1.mp3"
+        fogAmount: 0.75,
+        ambientSound: "./static/zw4/sfx/ambience1.mp3",
+        texAtlas: "level1.png"
+    },
+    {
+        particles: [
+            {texCoordStart: [784/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [800/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [816/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [832/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25}
+        ],
+        lighting: {
+            lightDirection: [0, -1, 0],
+            color: [0.6, 0.4, 0.4],
+            ambient: [0.6, 0.6, 0.55]
+        },
+        simulationDistance: 30,
+        renderDistance: 40,
+        fogAmount: 0.85,
+        ambientSound: "./static/zw4/sfx/ambience1.mp3",
+        texAtlas: "level2.png"
     }
 ];
