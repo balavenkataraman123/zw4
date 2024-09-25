@@ -87,3 +87,5 @@ so yeah i decided that zombiewars didn't look good enough and neither did it sou
 Also, I made **heavy optimizations** to the game so it runs blazing fast
 
 **https://zombiewars.net/**
+
+# Version 0.6
