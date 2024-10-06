@@ -340,7 +340,7 @@ class IHP {
                         var hsh = x + maxCoord * y + maxCoord * maxCoord * z;
                         if (physicsCloseTo.has(hsh)) {
                             for (var p1 of physicsCloseTo.get(hsh)) {
-                                if (physicsObjects[p1] != p) {
+                                if (physicsObjects[p1] != p && !alreadyCollided.has(p1)) {
                                     PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
                                     alreadyCollided.add(p1);
                                 }
@@ -348,7 +348,7 @@ class IHP {
                         }
                         if (physicsCloseTo_kin.has(hsh)) {
                             for (var p1 of physicsCloseTo_kin.get(hsh)) {
-                                if (physicsObjects[p1] != p) {
+                                if (physicsObjects[p1] != p && !alreadyCollided.has(p1)) {
                                     PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
                                     alreadyCollided.add(p1);
                                 }

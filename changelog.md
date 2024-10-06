@@ -89,3 +89,20 @@ Also, I made **heavy optimizations** to the game so it runs blazing fast
 **https://zombiewars.net/**
 
 # Version 0.6
+@zombiewars 
+## Zombiewars update
+-# beta v0.6
+- **Better menu screen** so it looks more profesisonal and nice
+  - Nice colors and finally a nice banner
+- **Minor balancing changes**
+  - Zombies have much reduced probability to go through walls (but since my physics engine is bad, there is still a very small chance of that happening)
+  - Zombie speed nerfed from 8m/s to 7m/s, react with :glenn_tf_u_say: if you want it nerfed even more
+- **Death screen** (finally) instead of the game just blanking out when you die
+  - Death music plays (isolated guitar of "under pressure" by Queen) because I get to choose the music and Queen is the best band
+- **Stats** (zombies killed and time survived) mostly for game dev club's gaming competition on Friday (go to game dev club)
+https://zombiewars.net/
+overall not that big but still it's nice ig
+
+Update notes on the actual website:
+**A New Look**
+We got a new homepage (finally) that looks better i guess? Also, we fixed the bug where zombies could go outside the walls (finally). Now if you die, you can only blame your skill issue. Lastly, we nerfed the zombies' movement speed from 8m/s to 7m/s.

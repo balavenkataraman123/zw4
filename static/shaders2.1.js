@@ -110,7 +110,7 @@ void main() {
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
 	highp vec3 vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
 	vColor = vec4(aColor.rgb * vLighting, aColor.a); // I really should mix it in the frag shader, but I'm trying to use fsSource so w h a t e v e r
-	vColor = mix(vColor, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount*1.3, 0.0, 1.0));
+	vColor = mix(vColor, uFogColor, clamp(fogAmount * uFogAmount, 0.0, 1.0));
 }
 `;
 const lightColorTransfVS = `
@@ -156,7 +156,7 @@ void main() {
 	highp float directional = max(dot(transformedNormal.xyz, uLightingInfo[0]), 0.0);
 	highp vec3 vLighting = uLightingInfo[2] + (uLightingInfo[1] * directional * 0.65);
 	vColor = vec4(aColor.rgb * vLighting, aColor.a); // I really should mix it in the frag shader, but I'm trying to use fsSource so w h a t e v e r
-	vColor = mix(vColor, uFogColor, clamp(clamp(fogAmount, 0.0, 1.0)*uFogAmount*1.0, 0.0, 1.0));
+	vColor = mix(vColor, uFogColor, clamp(fogAmount * uFogAmount, 0.0, 1.0));
 }
 `;
 const textureFS = `
@@ -174,7 +174,7 @@ void main() {
 	if (col.a < uAlphaAdj) {discard;}
 	col = vec4(col.rgb * vLighting, col.a);
 	float fogAmount = length(vPosition) * 0.05 - 0.3;
-	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
+	col = mix(col, uFogColor, clamp(fogAmount * uFogAmount, 0.0, 1.0));
 	gl_FragColor = col;
 	if (col.a == 0.0) {
 		discard;
@@ -207,7 +207,7 @@ void main() {
 	lowp vec4 col = vec4(texture2D(uSampler1, texCoord1) * mf.x + texture2D(uSampler2, texCoord2) * mf.y +
 		texture2D(uSampler3, texCoord3) * mf.z + texture2D(uSampler4, texCoord4) * mf.w);
 	col = vec4(col.rgb * vLighting, col.a);
-	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
+	col = mix(col, uFogColor, clamp(fogAmount * uFogAmount, 0.0, 1.0));
 	if (col.a == 0.0) {
 		discard;
 	} else {
@@ -321,7 +321,7 @@ void main() {
 	lowp vec4 col = texture2D(uSampler, texCoord);
 	col.a *= size;
 	float fogAmount = length(vPosition) * 0.05 - 0.3;
-	col = mix(col, uFogColor, clamp(clamp(fogAmount, 0.0, uFogAmount)*uFogAmount, 0.0, 1.0));
+	col = mix(col, uFogColor, clamp(fogAmount * uFogAmount, 0.0, 1.0));
 	if (col.a == 0.0) {
 		discard;
 	} else {

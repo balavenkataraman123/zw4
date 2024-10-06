@@ -6,8 +6,10 @@ var debugDispNow = {}; var showDebug = false, showGUI = true;
 var firstTime = 0;
 var oW, oH;
 var globalSkybox, currentLevel;
-var creativeMode = false;
+var creativeMode = true;
 var generalWorker;
+var paused = false;
+var firstTimePlaying = true; // whether it's the first time playing or the user died and restarted
 
 // creative mode interval
 setInterval(function() {
@@ -89,12 +91,16 @@ function gameHelp() {
 }
 
 function startGame() {
-	generalWorker = new Worker("./static/zw4/worker.js?randNum="+Math.random());
+	if (firstTimePlaying) {
+		generalWorker = new Worker("./static/zw4/worker.js?randNum="+Math.random());
+	}
 	player = new Player();
-	Gun.init();
-	Bullet.init();
-	IHP.init();
-	PathfinderInterface.init();
+	if (firstTimePlaying) {
+		Gun.init();
+		Bullet.init();
+		IHP.init();
+		PathfinderInterface.init();
+	}
 	oCtx.fillText("Loading...", 100, 100);
 	requestAnimationFrame(function(t) {firstTime = t;});
     requestAnimationFrame(gameLoop);
@@ -105,7 +111,7 @@ function startGame() {
 	globalSkybox = new SkyBox(models.skybox, createRenderBuffer("shaderProgram"));
 	canvas.style.backgroundColor = "black"; // cause alpha is not working gr
 
-	currentLevel = new Level(models.level2, 2);
+	currentLevel = new Level(models.level1, 1);
 	currentLevel.load();
 
 	menuSongAudioObject.pause();
@@ -117,7 +123,26 @@ function ded(reason) {
 	document.getElementById("deadReason").innerHTML = reason;
 	running = false;
 	deadSong.play();
+	firstTimePlaying = false;
 	SFXhandler.stopAll();
+	setTimeout(function() { // buy us some time to finish the current frame before stopping everything
+		// reset everything in preparation for the restart
+		// but not really reset everything, for example, we won't reset the render buffers and also won't call init() again
+		// WARNING: ^^^ may cause dumb behavior in the future when I add more features that rely on init() being called for every restart
+		lastTime = -1;
+		items = []; zombies = []; bullets = []; particles = []; physicsObjects = [];
+		IHP.regenerateKinematics();
+		clearAllBuffers();
+	}, 100);
+}
+
+function restartButton() {
+	deadSong.pause();
+	deadSong.currentTime = 40.37;
+	menuSongAudioObject.currentTime = 0;
+	menuSongAudioObject.play();
+	document.getElementById("deadDiv").style.display = "none";
+	document.getElementById("homeDiv").style.display = "block";
 }
 
 function onCameraTurn(e) {
@@ -155,6 +180,13 @@ function renderProgressCircle(msg, remaining, total) {
 }
 
 function gameLoop(_t) {
+
+	if (paused) {
+		lastTime = _t;
+		requestAnimationFrame(gameLoop);
+		return;
+	}
+
 	framesPassed++;
 	var _startTime = performance.now();
 	if (lastTime == -1) {lastTime = _t;}
@@ -207,7 +239,6 @@ function gameLoop(_t) {
 	
 
 	// updates
-	
 	IHP.physicsUpdate(dt, 16.666);
 	GUIeffects.update(dt);
 	// console.log("physics took " +  + (performance.now() - __ptime));

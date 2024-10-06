@@ -69,7 +69,7 @@ class AnimationRenderer {
 
 // custom map loader
 function loadMapFromObj(url, mtlUrl, callback) {
-	var res = {"position":[], "normal":[], "color": [], "texCoord": [], "hitboxes": [], "zombies": []};
+	var res = {"position":[], "normal":[], "color": [], "texCoord": [], "hitboxes": [], "zombies": [], "tps": []};
 	var rnd = Math.random();
 	// rnd = 1;
 	request(url+"?rand="+rnd, function(txt) { // jimmy rigged but it works
@@ -112,6 +112,22 @@ function loadMapFromObj(url, mtlUrl, callback) {
                     toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
                     toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
                     res.zombies.push({type: geom.material.replace("zombiemat_", ""), pos: toPush[0], dx: toPush[1][0], dy: toPush[1][1], dz: toPush[1][2]});
+                } else if (geom.material == "tpmat") {
+                    // this is a teleporter to the next level
+                    var mins = [Infinity, Infinity, Infinity];
+                    var maxs = [-Infinity, -Infinity, -Infinity];
+                    var p = geom.data.position;
+                    for (let i=0; i<p.length; i+=3) {
+                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
+                            mins[ind] = Math.min(mins[ind], el);
+                            maxs[ind] = Math.max(maxs[ind], el);
+                        });
+                    }
+                    var toPush = [];
+                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
+                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
+                    res.tps.push(toPush);
                 }
                 else {
                     res.position = res.position.concat(geom.data.position);
@@ -143,7 +159,8 @@ var oTex = {
     "grass": "grass.png",
     "crosshair": "crosshair.svg",
     "hitMarker": "hit crosshair.svg",
-    "damageMarker": "damage marker.svg"
+    "damageMarker": "damage marker.svg",
+    "levelComplete": "level complete.svg"
 };
 
 var itemTexCoords = {
@@ -171,7 +188,8 @@ var hbNames = {
 
 var levelNames = {
     level1: "buildingobj/level1",
-    level2: "buildingobj/level2"
+    level2: "buildingobj/level2",
+    level3: "buildingobj/credits",
 };
 
 var audios = {

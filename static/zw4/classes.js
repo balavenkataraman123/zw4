@@ -23,6 +23,8 @@ class SFXhandler {
         music: 1,
         default: 1
     };
+    static internalMasterVolume = 1; // meant to be set by the code
+    static userMasterVolume = 1; // meant to be set by the user
     static distanceDropoff(dist) {
         // returns [0, 1] depending on distance
         return Math.max(0, Math.pow(0.9, dist));
@@ -38,7 +40,7 @@ class SFXhandler {
             obj: new Audio(url)
         };
         toPush.obj.loop = loop;
-        toPush.obj.volume = volume * this.categoryVolume[category] * this.distanceDropoff(glMatrix.vec3.dist(pos, this.earPos));
+        toPush.obj.volume = volume * this.categoryVolume[category] * SFXhandler.internalMasterVolume * SFXhandler.userMasterVolume * this.distanceDropoff(glMatrix.vec3.dist(pos, this.earPos));
         if (ambient) {toPush.obj.volume = volume * this.categoryVolume[category];}
         toPush.obj.play();
         if (!loop) toPush.obj.addEventListener("ended", function() {toPush.removed = true;});
@@ -47,16 +49,16 @@ class SFXhandler {
     static update() {
         this.nowPlaying = this.nowPlaying.filter(p=>!p.removed);
         for (var s of this.nowPlaying) {
-            s.obj.volume = s.volume * this.categoryVolume[s.category] * this.distanceDropoff(glMatrix.vec3.dist(s.pos, this.earPos));
+            s.obj.volume = s.volume * SFXhandler.internalMasterVolume * SFXhandler.userMasterVolume * this.categoryVolume[s.category] * this.distanceDropoff(glMatrix.vec3.dist(s.pos, this.earPos));
             if (s.ambient) {s.obj.volume = s.volume * this.categoryVolume[s.category];}
         }
     }
     static stopAll() {
-        // stops all audio and prevents further playback (used when player is dead)
+        // stops all audio and deletes them
         for (var a of SFXhandler.nowPlaying) {
             a.obj.pause();
         }
-        SFXhandler.newSound = function(){};
+        SFXhandler.nowPlaying = [];
     }
 }
 
@@ -513,14 +515,14 @@ class Zombie extends PhysicsObject {
         this.aggroHitbox = new PhysicsObject(x, y, z, aggroWidth[0], aggroWidth[1], aggroWidth[2], true, true, true);
         this.aggroHitbox.useAllowList = true;
         this.aggroHitbox.collidesWith.add("Player");
+
+        // countdown for timing the aggro noises
+        this.aggroNoiseCountdown = 0;
+
         let zo = this; // generate a closure for the onCollision function
         this.aggroHitbox.onCollision = function(o, normal) {
             if (o == player && !zo.aggroed && !zo.removed) {
                 zo.aggroed = true;
-                SFXhandler.newSound("./static/zw4/sfx/angry_" + zo.type + "_" + Math.floor(Math.random() * zo.specs.aggroSoundCount+1) + ".mp3", zo.pos, 1, "SFX", false, false);
-                zo.aggroSoundsInterval = setInterval(function() {
-                    SFXhandler.newSound("./static/zw4/sfx/angry_" + zo.type + "_" + Math.floor(Math.random() * zo.specs.aggroSoundCount+1) + ".mp3", zo.pos, 1, "SFX", false, false);
-                }, 5000);
             }
         }
 
@@ -567,6 +569,13 @@ class Zombie extends PhysicsObject {
                 zomb.yaw = 0;
             }
             if (zomb.aggroed) {
+                // noises
+                zomb.aggroNoiseCountdown -= dt;
+                if (zomb.aggroNoiseCountdown <= 0) {
+                    SFXhandler.newSound("./static/zw4/sfx/angry_" + zomb.type + "_" + Math.floor(Math.random() * zomb.specs.aggroSoundCount+1) + ".mp3", zomb.pos, 1, "SFX", false, false);
+                    zomb.aggroNoiseCountdown = 5000;
+                }
+
                 // pathfind
                 glMatrix.vec3.add(zomb.pos, zomb.pos, glMatrix.vec3.scale([0, 0, 0],
                     zomb.pathfinder.update(dt, zomb.pos, zomb.id), zombieSpecs[zomb.type].speed * dt/1000));
@@ -654,7 +663,7 @@ class Player extends PhysicsObject {
         this.cameraPos = glMatrix.vec3.fromValues(0, 4, 1);
         this.yaw = 0; this.pitch = 0;
         this.speed = 3.61;
-        this.sprintSpeed = 6;
+        this.sprintSpeed = 30; // used to be 6
         this.jumpPower = 4; // 4 m s^-1 when they leave the ground
         this.inv = [new Gun("MP40"), new Gun("MAC M10"), new NothingGun(""), new NothingGun("")];
         this.invIndex = 0;
@@ -794,6 +803,58 @@ class Level {
             new PhysicsObject(hb[0][0], hb[0][1], hb[0][2], hb[1][0], hb[1][1], hb[1][2], true, false, true);
         }
 
+        for (var tp of this.data.tps) {
+            var a = new PhysicsObject(tp[0][0], tp[0][1], tp[0][2], tp[1][0], tp[1][1], tp[1][2], true, true, true);
+            particles.push(new ParticleSystem([tp[0][0], tp[0][1], tp[0][2]], D_ONE_POINT(), 0.8, 5, [243/texW, 1536/texH], 39/texW, 0.2, 30, 1000000, 1000000));
+            let l = this; // create closure
+            a.onCollision = function(o, normal) {
+                paused = true;
+                console.log("collision with tpmat");
+                if (o == player) {
+                    setTimeout(function() { // buy some time for the current frame to finish before we reset everything
+                        paused = true;
+                        let cnt = 0;
+                        // reset everything
+                        for (var po of physicsObjects) {
+                            if (po == player) continue;
+                            po.removed = true;
+                        }
+                        for (var bul of bullets) {bul.removed = true;}
+                        physicsObjects = physicsObjects.filter(p=>!p.removed); items = []; zombies = []; bullets = []; particles = [];
+                        IHP.regenerateKinematics();
+                        clearAllBuffers();
+    
+                        // fade stuff
+                        let fadeInterval = setInterval(function() {
+                            cnt++;
+                            SFXhandler.internalMasterVolume *= 0.98;
+                            oCtx.globalAlpha = 0.02;
+                            oCtx.drawImage(oTex.levelComplete, 0, 0, oW, oH);
+                            if (cnt > 300) {
+                                console.log("clearing interval and loading level")
+                                clearInterval(fadeInterval);
+                                SFXhandler.stopAll();
+                                SFXhandler.internalMasterVolume = 1;
+                                // play recording, etc
+                                player.cameraFront = glMatrix.vec3.fromValues(0, 4, 0);
+                                player.cameraUp = glMatrix.vec3.fromValues(0, 1, 0);
+                                player.cameraPos = glMatrix.vec3.fromValues(0, 4, 1);
+                                player.pos = [0,3,0];
+                                player.yaw = 0; player.pitch = 0;
+                                currentLevel = new Level(models["level"+(l.levelNum+1)], l.levelNum+1);
+                                currentLevel.load();
+
+                                setTimeout(function() {
+                                    paused = false;
+                                    particles.push(new ParticleSystem([0,3,0], D_ONE_POINT(), 0.8, 5, [243/texW, 1536/texH], 39/texW, 0.2, 10, 7500, 4));
+                                }, levelSpecs[l.levelNum].waitTime);
+                            }
+                        }, 10);
+                    }, 100);
+                }
+            }
+        }
+
         for (var zomb of this.data.zombies) {
             new Zombie(zomb.pos[0], zomb.pos[1], zomb.pos[2], zomb.type, new AwajibaPathfinder(), [zomb.dx, zomb.dy, zomb.dz]);
         }
@@ -805,5 +866,7 @@ class Level {
         IHP.simulationDistance = levelSpecs[this.levelNum].simulationDistance;
 
         SFXhandler.newSound(levelSpecs[this.levelNum].ambientSound, [0,0,0], 1, "ambience", true, true);
+
+        GUIeffects.newTextEffect("Level " + (this.levelNum), oH * 0.23, "#ff6100", "#ffd42d", 3, 5, [oW * 0.5 - oH * 0.3, oH * 0.4], [0,0], [0,0], 0);
     }
 }

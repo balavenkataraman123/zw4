@@ -201,6 +201,14 @@ function shaderAddData(datas, shader) { // add data to any shader
 	}
 }
 
+function clearAllBuffers() {
+	// clears buffers of all shaders
+	// WARNING: does not flush to GPU
+	for (var prop in buffers_d) {
+		clearShaderData(prop);
+	}
+}
+
 function clearShaderData(shader) {
 	var d = buffers_d[shader].data;
 	for (var prop in d) {
@@ -314,6 +322,12 @@ function flushRB(loc, program) {
 
 function getRBdata(loc, program) {
 	return renderBuffers[program][loc].data;
+}
+
+function clearRenderBuffer(loc, program) {
+	for (var prop in renderBuffers[program][loc].data) {
+		renderBuffers[program][loc].data[prop] = [];
+	}
 }
 
 const D_ONE_POINT = function() {

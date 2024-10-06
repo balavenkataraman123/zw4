@@ -69,7 +69,8 @@ var levelSpecs = [undefined, // fill in 0th element
         renderDistance: 40,
         fogAmount: 0.75,
         ambientSound: "./static/zw4/sfx/ambience1.mp3",
-        texAtlas: "level1.png"
+        texAtlas: "level1.png",
+        waitTime: 1000, // time to wait before advancing to the next level
     },
     {
         particles: [
@@ -87,6 +88,26 @@ var levelSpecs = [undefined, // fill in 0th element
         renderDistance: 40,
         fogAmount: 0.85,
         ambientSound: "./static/zw4/sfx/ambience1.mp3",
-        texAtlas: "level2.png"
+        texAtlas: "level2.png",
+        waitTime: 1000
+    },
+    {
+        particles: [
+            {texCoordStart: [784/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [800/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [816/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25},
+            {texCoordStart: [832/TEXW, 1536/TEXH], texCoordWidth: 16/TEXW, velocity: -0.25, lifetime: 30, size: 0.06, intensity: 25}
+        ],
+        lighting: {
+            lightDirection: [1, 1, 0],
+            color: [0.7, 1, 0.8],
+            ambient: [0.6, 0.6, 0.55]
+        },
+        simulationDistance: 30,
+        renderDistance: 40,
+        fogAmount: 0.3,
+        ambientSound: "./static/zw4/songs/calm song.mp3",
+        texAtlas: "credits level.png",
+        waitTime: 1000
     }
 ];
