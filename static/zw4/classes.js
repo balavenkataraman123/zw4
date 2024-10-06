@@ -663,7 +663,7 @@ class Player extends PhysicsObject {
         this.cameraPos = glMatrix.vec3.fromValues(0, 4, 1);
         this.yaw = 0; this.pitch = 0;
         this.speed = 3.61;
-        this.sprintSpeed = 30; // used to be 6
+        this.sprintSpeed = 6; // used to be 6
         this.jumpPower = 4; // 4 m s^-1 when they leave the ground
         this.inv = [new Gun("MP40"), new Gun("MAC M10"), new NothingGun(""), new NothingGun("")];
         this.invIndex = 0;
