@@ -45,6 +45,7 @@ class SFXhandler {
         toPush.obj.play();
         if (!loop) toPush.obj.addEventListener("ended", function() {toPush.removed = true;});
         this.nowPlaying.push(toPush);
+        return toPush;
     }
     static update() {
         this.nowPlaying = this.nowPlaying.filter(p=>!p.removed);
@@ -59,6 +60,11 @@ class SFXhandler {
             a.obj.pause();
         }
         SFXhandler.nowPlaying = [];
+    }
+    static cancelPlayback(x) {
+        // cancels the playback of x
+        x.removed = true;
+        x.obj.pause();
     }
 }
 
@@ -120,6 +126,7 @@ class GUIeffects {
 
 class Cartridge extends PhysicsObject {
     // an ejected cartridge. updates and everything are handled through Gun.
+    static maxDist = 20;
     constructor(pos, model, angleY) {
         super(pos[0], pos[1], pos[2], 0.1, 0.1, 0.1, false, false, true);
         this.model = model; this.angleY = angleY;
@@ -182,8 +189,10 @@ class Gun {
         this.roundsRemaining = 0;
         this.reloadRemaining = 0;
         this.type = "gun";
-        this.currentRecoil = 0;
+        this.currentRecoilTranslation = glMatrix.vec3.create();
+        this.currentRecoilRotation = glMatrix.vec3.create();
         this.pos = [0,0,0];
+        this.reloadSFX = null; // the SFX handler audio thingy for the reload
     }
     update(dt, focused, pos) {
         this.pos = pos;
@@ -194,22 +203,54 @@ class Gun {
             if (oldRR > 0 && this.reloadRemaining <= 0) {
                 // we finished reloading
                 this.roundsRemaining += this.specs.roundsPerReload;
+                this.roundsRemaining = Math.min(this.roundsRemaining, this.specs.capacity); // when you reload and your mag isn't empty, it might cause the number of bullets to be above the capacity so clamp them
+                if (this.roundsRemaining != this.specs.capacity) { // for cycle reload weapons
+                    this.attemptReload();
+                }
             }
         }
         this.firingDelay -= dt;
-        if (this.roundsRemaining == 0 && this.reloadRemaining < 0) {
-            this.reloadRemaining = this.specs.reloadTime; // we need to reload
-            SFXhandler.newSound("./static/zw4/sfx/reload.mp3", this.pos, 1, "SFX", false);
+        if (this.roundsRemaining == 0) {
+            this.attemptReload();
         }
-        this.currentRecoil *= 0.8;
+        glMatrix.vec3.scale(this.currentRecoilRotation, this.currentRecoilRotation, this.specs.recoil.recoilDecayFactor);
+        glMatrix.vec3.scale(this.currentRecoilTranslation, this.currentRecoilTranslation, this.specs.recoil.recoilDecayFactor);
+    }
+    attemptReload() {
+        // attempts to reload the gun
+        // may fail if
+        // 1. already reloading
+        // 2. firingDelay > 0 and you can't reload when firing
+        // 3. already full
+        if (this.roundsRemaining != this.specs.capacity && this.reloadRemaining <= 0 && this.firingDelay < 0) {
+            this.reloadRemaining = this.specs.reloadTime; // we need to reload
+            this.reloadSFX = SFXhandler.newSound("./static/zw4/sfx/reload_" + this.name + ".mp3", this.pos, 1, "SFX", false);
+        }
     }
     recoil() {
-        this.currentRecoil = 0.5;
+        this.currentRecoilTranslation = glMatrix.vec3.fromValues(this.specs.recoil.recoilSideDevation * (Math.random() - 0.5), 0, this.specs.recoil.linearRecoil);
+        this.currentRecoilRotation = glMatrix.vec3.fromValues(this.specs.recoil.muzzleRiseRotation, this.specs.recoil.recoilSideRotation * (Math.random() - 0.5), 0);
     }
     canShoot() { // returns true if the player can shoot right now and then shoots
-        if (this.firingDelay <= 0 && this.reloadRemaining <= 0) {
+        if (this.firingDelay <= 0 && this.roundsRemaining > 0) {
+            SFXhandler.newSound("./static/zw4/sfx/fire_" + this.name + ".mp3", [0,0,0], 1, "SFX", true);
             this.roundsRemaining--;
-            this.firingDelay = this.specs.delay;
+            if (!this.specs.burstFire) {
+                this.firingDelay = this.specs.delay;
+            } else {
+                if (this.roundsRemaining % this.specs.roundsPerBurst == 0) {
+                    this.firingDelay = this.specs.delay;
+                } else {
+                    this.firingDelay = this.specs.burstDelay;
+                }
+            }
+            if (this.reloadRemaining > 0) {
+                // was in the process of reloading when they shot
+                // cancel previous reload
+                this.reloadRemaining = -1;
+                SFXhandler.cancelPlayback(this.reloadSFX);
+                this.attemptReload();
+            }
             return true;
         }
         return false;
@@ -218,12 +259,18 @@ class Gun {
         gl.useProgram(buffers_d.objShader.compiled);
         useRenderBuffer(Gun.addresses[this.name], "objShader");
         var oldMVM = new Float32Array(modelViewMatrix);
+        // translate the MVM for recoil
         if (sighting) {
-            glMatrix.mat4.fromTranslation(modelViewMatrix, [0, 0, 0 + this.currentRecoil]);
+            glMatrix.mat4.fromTranslation(modelViewMatrix, this.currentRecoilTranslation);
         } else {
-            glMatrix.mat4.fromTranslation(modelViewMatrix, [-0.35, -0.1, -0.75 + this.currentRecoil]);
+            glMatrix.mat4.fromTranslation(modelViewMatrix, [-0.2, -0.05, -0.5]);
         }
+        // rotate the MVM for recoil
+        glMatrix.mat4.rotateX(modelViewMatrix, modelViewMatrix, this.currentRecoilRotation[0]);
+        glMatrix.mat4.rotateY(modelViewMatrix, modelViewMatrix, this.currentRecoilRotation[1]);
+        glMatrix.mat4.rotateZ(modelViewMatrix, modelViewMatrix, this.currentRecoilRotation[2]);
         gl.uniformMatrix4fv(buffers_d.objShader.uniform.uModelViewMatrix, false, modelViewMatrix);
+
         gl.drawArrays(gl.TRIANGLES, 0, getRBdata(Gun.addresses[this.name], "objShader").aVertexPosition.length/3);
         modelViewMatrix = oldMVM;
         gl.uniformMatrix4fv(buffers_d.objShader.uniform.uModelViewMatrix, false, modelViewMatrix);
@@ -232,7 +279,7 @@ class Gun {
         Gun.muzzleFlashes = Gun.muzzleFlashes.filter((x)=>x.framesLeft>0);
         Gun.cartridges = Gun.cartridges.filter((x)=>!x.removed);
         for (var c of Gun.cartridges) {
-            if (glMatrix.vec3.dist(player.pos, c.pos) > Bullet.maxDist) {
+            if (glMatrix.vec3.dist(player.pos, c.pos) > Cartridge.maxDist) {
                 c.removed = true;
             }
         }
@@ -325,7 +372,8 @@ class NothingGun { // basically an empty inv slot
 }
 
 class Item extends PhysicsObject {
-    // TODO: add render distance and simulation distance bounds
+    static maximumAltitude = 100;
+    static minimumAltitude = -10; // this way, they are removed before they are put to sleep
     constructor(x, y, z, thing, type, add = true) {
         super(x, y, z, 0.2, 0.2, 0.2, false, true, true);
         this.type = type;
@@ -350,43 +398,49 @@ class Item extends PhysicsObject {
         }
     }
     onCollision(obj, n) {
+        if (this.removed) {return;} // since items may not be removed instantly
         if (this.type == "gun") {
             if (obj.constructor.name == "Player") {
-                if (player.selected.name == "empty") {
-                    player.inv[player.invIndex] = new Gun(this.thing);
-                    this.removed = true;
-                } else if (player.inv[0].name == "empty") {
-                    player.inv[0] = new Gun(this.thing);
-                    this.removed = true;
-                } else if (player.inv[1].name == "empty") {
-                    player.inv[1] = new Gun(this.thing);
-                    this.removed = true;
-                } else {
-                    oCtx.fillStyle = "black";
-                    oCtx.fillRect(oW * 0.4, oH * 0.03, oW * 0.2, oH * 0.07);
-                    oCtx.textAlign = "center";
-                    oCtx.fillStyle = "white";
-                    oCtx.font = (oH * 0.06) + "px Impact";
-                    oCtx.fillText("F - " + this.thing, oW * 0.5, oH * 0.08);
-                    if (divisDownKeys["KeyF"]) {
-                        player.inv[player.invIndex] = new Gun(this.thing);
-                        this.removed = true;
+                oCtx.fillStyle = "black";
+                oCtx.fillRect(oW * 0.4, oH * 0.03, oW * 0.2, oH * 0.07);
+                oCtx.textAlign = "center";
+                oCtx.fillStyle = "white";
+                oCtx.font = (oH * 0.06) + "px Impact";
+                oCtx.fillText("F - " + this.thing, oW * 0.5, oH * 0.08);
+                if (divisDownKeys["KeyF"]) {
+                    var found = false;
+                    for (var i=0; i<4; i++) {
+                        if (player.inv[i].constructor.name == "NothingGun") {
+                            player.inv[i] = new Gun(this.thing);
+                            found = true;
+                            break;
+                        }
                     }
+                    if (!found) {
+                        player.inv[player.invIndex] = new Gun(this.thing);
+                    }
+                    this.removed = true;
                 }
             }
         }
     }
     static update(dt) {
+        for (var ib of items) {if (ib.removed) {ib.hb2.removed = true;}}
         items = items.filter((it)=>!it.removed);
         for (var ib of items) {
             ib.pos = ib.hb2.pos;
             ib.vel = [0, 0, 0];
             ib.t += dt/1000;
+            if (ib.pos[1] < Item.minimumAltitude || ib.pos[1] > Item.maximumAltitude) {
+                ib.removed = true;
+            }
         }
     }
     static renderAll() {
         for (var ib of items) {
-            ib.render();
+            if (glMatrix.vec3.distance(ib.pos, player.pos) < levelSpecs[currentLevel.levelNum].simulationDistance) {
+                ib.render();
+            }
         }
     }
 }
@@ -394,7 +448,6 @@ class Item extends PhysicsObject {
 class Bullet {
     // note: bullets don't have render distance and simulation distance and stuff because they travel very fast and are removed at maxDist from the player anyways
     static address;
-    static maxDist = 50; // max distance from player before bullets are deleted
     static init() {
         this.address = createRenderBuffer("transformShader");
     }
@@ -443,7 +496,7 @@ class Bullet {
             glMatrix.vec3.add(bul.pos, bul.pos, glMatrix.vec3.scale([0,0,0], bul.velOffset, dt / 1000));
             bul.actualLength += bul.speed * dt / 1000;
             bul.actualLength = Math.min(bul.actualLength, bul.maxLength);
-            if (glMatrix.vec3.distance(player.cameraPos, bul.pos) > Bullet.maxDist) {
+            if (glMatrix.vec3.distance(player.cameraPos, bul.pos) > levelSpecs[currentLevel.levelNum].physicsSimulationDistanceG) {
                 bul.removed = true;
                 for (var hb of bul.hitboxes) {hb.removed = true;}
             }
@@ -586,7 +639,6 @@ class Zombie extends PhysicsObject {
                 // burst fire
                 if (zomb.burstRoundsRemaining > 0 && zomb.gun.canShoot()) {
                     zomb.burstRoundsRemaining--;
-                    SFXhandler.newSound("./static/zw4/sfx/fire.mp3", zomb.pos, 1, "SFX", false);
                     // now we rotate bulletPos around the zombie's feet
                     // basically, since the zombie's model was rotated around its feet, we need to rotate bulletPos around the feet too
                     glMatrix.vec3.rotateZ(bulletPos, bulletPos, [zomb.pos[0], zomb.pos[1] - zomb.dy, zomb.pos[2]], glMatrix.glMatrix.toRadian(zomb.pitch));
@@ -656,6 +708,8 @@ function angleBetweenVectors(a, b) {
 
 class Player extends PhysicsObject {
     static seeMuzzleflashDistance = 20;
+    static minimumAltitude = -40;
+    static maximumAltitude = 100;
     constructor() {
         super(0, 3, 0, 0.2, 0.85, 0.2, false, false, true);
         this.cameraFront = glMatrix.vec3.fromValues(0, 4, 0);
@@ -665,7 +719,7 @@ class Player extends PhysicsObject {
         this.speed = 3.61;
         this.sprintSpeed = 6; // used to be 6
         this.jumpPower = 4; // 4 m s^-1 when they leave the ground
-        this.inv = [new Gun("MP40"), new Gun("MAC M10"), new NothingGun(""), new NothingGun("")];
+        this.inv = [new Gun("MP40"), new NothingGun(""), new NothingGun(""), new NothingGun("")];
         this.invIndex = 0;
         this.selected = this.inv[0];
         this.health = 100;
@@ -700,8 +754,8 @@ class Player extends PhysicsObject {
         modelViewMatrix = glMatrix.mat4.lookAt(modelViewMatrix, this.cameraPos, target, [0, 1, 0]);
 
         // altitude damage
-        if (this.pos[1] < -100 || this.pos[1] > 100) {
-            this.health -= 30 * dt/1000;
+        if (this.pos[1] < Player.minimumAltitude || this.pos[1] > Player.maximumAltitude) {
+            this.health -= 100 * dt/1000;
             if (this.health <= 0) {
                 ded("Player fell off the map.");
             }
@@ -729,7 +783,7 @@ class Player extends PhysicsObject {
         }
     }
     onCollision(obj, normal) {
-        if (normal == "y" && obj.pos[1] < this.pos[1] && divisDownKeys["Space"]) {
+        if (!obj.trigger && normal == "y" && obj.pos[1] < this.pos[1] && divisDownKeys["Space"]) {
             this.jump();
         }
     }
@@ -808,9 +862,9 @@ class Level {
             particles.push(new ParticleSystem([tp[0][0], tp[0][1], tp[0][2]], D_ONE_POINT(), 0.8, 5, [243/texW, 1536/texH], 39/texW, 0.2, 30, 1000000, 1000000));
             let l = this; // create closure
             a.onCollision = function(o, normal) {
-                paused = true;
                 console.log("collision with tpmat");
                 if (o == player) {
+                    paused = true;
                     setTimeout(function() { // buy some time for the current frame to finish before we reset everything
                         paused = true;
                         let cnt = 0;
@@ -858,12 +912,17 @@ class Level {
         for (var zomb of this.data.zombies) {
             new Zombie(zomb.pos[0], zomb.pos[1], zomb.pos[2], zomb.type, new AwajibaPathfinder(), [zomb.dx, zomb.dy, zomb.dz]);
         }
+
+        for (var item of this.data.items) {
+            new Item(...item);
+        }
     
         player.genPathfindingMesh();
 
         this.particleEffect = new ParticleEffects(1); // hardcode level number for now
 
-        IHP.simulationDistance = levelSpecs[this.levelNum].simulationDistance;
+        IHP.simulationDistance_kin = levelSpecs[this.levelNum].simulationDistanceR;
+        IHP.simulationDistance_notKin = levelSpecs[this.levelNum].simulationDistanceG;
 
         SFXhandler.newSound(levelSpecs[this.levelNum].ambientSound, [0,0,0], 1, "ambience", true, true);
 

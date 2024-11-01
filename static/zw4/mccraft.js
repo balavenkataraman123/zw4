@@ -35,10 +35,16 @@ function vec3_cross(a, b) {
 
 function debugUpdate() {
 	var res = "<strong>Debug Display</strong><br>";
-	for (var prop in debugDispNow) {
+	var props = Object.keys(debugDispNow);
+	props.sort();
+	for (var prop of props) {
 		res += prop;
 		res += ": ";
-		res += JSON.stringify(debugDispNow[prop]);
+		if (typeof debugDispNow[prop] == "number") {
+			res += debugDispNow[prop].toFixed(4); // prevent massive decimal chains
+		} else {
+			res += JSON.stringify(debugDispNow[prop]);
+		}
 		res += "<br>";
 	}
 	document.getElementById("debugStuff").innerHTML = res;
@@ -71,8 +77,6 @@ var assetsReady = function() {
 						document.mozExitPointerLock;
 	canvas.addEventListener("mousemove", onCameraTurn);
 	overlay.addEventListener("mousemove", function(e) {mousepos = [e.clientX, e.clientY];});
-	canvas.addEventListener("mousedown", ()=>{mouseDown = true;});
-	canvas.addEventListener("mouseup", ()=>{mouseDown = false;});
 	canvas.addEventListener("wheel", e=>{
 		if (e.deltaY > 0) {
 			if (player.selected == 3) {player.selected = 0;}
@@ -189,6 +193,7 @@ function gameLoop(_t) {
 
 	framesPassed++;
 	var _startTime = performance.now();
+	var _finishedLastTask = performance.now();
 	if (lastTime == -1) {lastTime = _t;}
 	var dt = _t - lastTime;
 	lastTime = _t;
@@ -200,7 +205,6 @@ function gameLoop(_t) {
 	globalFogAmount = levelSpecs[currentLevel.levelNum].fogAmount;
 	lightingInfo = [...levelSpecs[currentLevel.levelNum].lighting.lightDirection, ...levelSpecs[currentLevel.levelNum].lighting.color, ...levelSpecs[currentLevel.levelNum].lighting.ambient];
 
-	__ptime = performance.now();
 	// movement
 	var actualSpeed = player.speed;
 	if (divisDownKeys["ShiftLeft"]) {
@@ -227,6 +231,9 @@ function gameLoop(_t) {
 	if (divisDownKeys["KeyD"]) {
 		glMatrix.vec3.add(player.pos, player.pos, right);
 	}
+	if (divisDownKeys["KeyR"] && player.selected.constructor.name == "Gun") {
+		player.selected.attemptReload();
+	}
 	if (divisDownKeys["Digit1"]) {player.invIndex = 0;}
 	if (divisDownKeys["Digit2"]) {player.invIndex = 1;}
 	if (divisDownKeys["Digit3"]) {player.invIndex = 2;}
@@ -234,15 +241,17 @@ function gameLoop(_t) {
 
 	IHP.simulationCenter = player.pos;
 
-	// console.log("movement headers took " + (performance.now() - __ptime));
-	__ptime = performance.now();
+	debugDispNow["[p] movement headers "] = performance.now() - _finishedLastTask;
+	_finishedLastTask = performance.now();
 	
 
 	// updates
 	IHP.physicsUpdate(dt, 16.666);
 	GUIeffects.update(dt);
-	// console.log("physics took " +  + (performance.now() - __ptime));
-	__ptime = performance.now();
+	debugDispNow["[p] physics "] = performance.now() - _finishedLastTask;
+	_finishedLastTask = performance.now();
+
+
 	player.update(dt);
 	Bullet.update(dt);
 	Item.update(dt);
@@ -253,11 +262,12 @@ function gameLoop(_t) {
 	SFXhandler.earPos = player.pos;
 	
 	// firing
+	debugDispNow["lmb"] = mouseDown;
+	debugDispNow["rmb"] = rmb;
 	if (player.selected.type == "gun") {
 		player.selected.update(dt, true, player.pos);
 		if (mouseDown && player.selected.canShoot()) {
 			player.selected.recoil();
-			SFXhandler.newSound("./static/zw4/sfx/fire.mp3", [0,0,0], 1, "SFX", true);
 			var scaledFront = glMatrix.vec3.create();
 			var distanceFromPlayer = player.selected.specs.barrelLength;
 			var spawnPos = glMatrix.vec3.create();
@@ -267,15 +277,16 @@ function gameLoop(_t) {
 				player.selected.specs.spread, player.selected.specs.bulletColor,
 				player.selected.specs.bulletWidth, player.selected.specs.bulletLength,
 				player.selected.specs.bulletSpeed, player.selected.specs.damage, 5, [player.vel[0], player.vel[1], player.vel[2]]);
-			Gun.muzzleFlash(spawnPos, 0.3, 5, 1);
+			Gun.muzzleFlash(spawnPos, 0.175, 5, 1);
 			var cartridgeScaledFront = glMatrix.vec3.create(), cartridgePos = glMatrix.vec3.create();
 			glMatrix.vec3.scale(cartridgeScaledFront, player.cameraFront, player.selected.specs.ejectionDistance);
 			glMatrix.vec3.add(cartridgePos, player.cameraPos, cartridgeScaledFront);
-			Gun.ejectCartridge(cartridgePos, "cartridge_9x19", glMatrix.glMatrix.toRadian(-player.yaw));
+			Gun.ejectCartridge(cartridgePos, player.selected.specs.cartridge, glMatrix.glMatrix.toRadian(-player.yaw));
 		}
 	}
 
-	// console.log("player, bullets, items and zombies took "  + (performance.now() - __ptime));
+	debugDispNow["[p] updates "] = performance.now() - _finishedLastTask;
+	_finishedLastTask = performance.now();
 
 	// rendering
 	__ptime = performance.now();
@@ -291,7 +302,7 @@ function gameLoop(_t) {
 	Gun.render();
 
 	if (showGUI) {
-		player.selected.render(mouseDown);
+		player.selected.render(mouseDown || rmb);
 	}
 
 	updateParticles(dt);
@@ -299,14 +310,15 @@ function gameLoop(_t) {
 	IHP.drawAllBoxes();
 	// player.pathfinder.renderGrid();
 
-	// console.log("all rendering took "  + (performance.now() - __ptime));
+	debugDispNow["[p] rendering "] = performance.now() - _finishedLastTask;
+	_finishedLastTask = performance.now();
 
 	// GUI
 	if (showGUI) {
 		__ptime = performance.now();
 		// crosshair
 		var crosshairSize = oW * 0.07;
-		if (!(mouseDown && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
+		if (!( (mouseDown || rmb) && player.selected.type == "gun")) { // when the player is sighting with the gun, no crosshair
 			oCtx.drawImage(oTex.crosshair, oW * 0.5-crosshairSize/2, oH * 0.5-crosshairSize/2, crosshairSize, crosshairSize);
 		}
 
@@ -393,6 +405,7 @@ function gameLoop(_t) {
 	if (framesPassed % 200 == 0) {
 		debugDispNow["frame time"] = performance.now() - _startTime;
 	}
-	// console.log("gui took " + (performance.now() - __ptime));
+	debugDispNow["[p] GUI"] = performance.now() - _finishedLastTask;
+	_finishedLastTask = performance.now();
     requestAnimationFrame(gameLoop);
 }

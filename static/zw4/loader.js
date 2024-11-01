@@ -69,7 +69,7 @@ class AnimationRenderer {
 
 // custom map loader
 function loadMapFromObj(url, mtlUrl, callback) {
-	var res = {"position":[], "normal":[], "color": [], "texCoord": [], "hitboxes": [], "zombies": [], "tps": []};
+	var res = {"position":[], "normal":[], "color": [], "texCoord": [], "hitboxes": [], "zombies": [], "tps": [], "items": []};
 	var rnd = Math.random();
 	// rnd = 1;
 	request(url+"?rand="+rnd, function(txt) { // jimmy rigged but it works
@@ -79,55 +79,51 @@ function loadMapFromObj(url, mtlUrl, callback) {
 		request(mtlUrl+"?rand="+rnd, function(mats) {
 			var materials = parseMTL(mats);
 			for (const geom of data.geometries) {
+                // this is a hitbox
+                var mins = [Infinity, Infinity, Infinity];
+                var maxs = [-Infinity, -Infinity, -Infinity];
+                var p = geom.data.position;
+                for (let i=0; i<p.length; i+=3) {
+                    [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
+                        mins[ind] = Math.min(mins[ind], el);
+                        maxs[ind] = Math.max(maxs[ind], el);
+                    });
+                }
+                var toPush = [];
+                toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
+                toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
+                toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
                 if (geom.material == "hbmat") {
-                    // this is a hitbox
-                    var mins = [Infinity, Infinity, Infinity];
-                    var maxs = [-Infinity, -Infinity, -Infinity];
-                    var p = geom.data.position;
-                    for (let i=0; i<p.length; i+=3) {
-                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
-                            mins[ind] = Math.min(mins[ind], el);
-                            maxs[ind] = Math.max(maxs[ind], el);
-                        });
-                    }
-                    var toPush = [];
-                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
-                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
-                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
                     res.hitboxes.push(toPush);
                 } else if (geom.material.startsWith("zombiemat_")) {
                     // this is a zombie
                     // zombies have an aggro radius, this is just the size of the cube that is the zombie
-                    var mins = [Infinity, Infinity, Infinity];
-                    var maxs = [-Infinity, -Infinity, -Infinity];
-                    var p = geom.data.position;
-                    for (let i=0; i<p.length; i+=3) {
-                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
-                            mins[ind] = Math.min(mins[ind], el);
-                            maxs[ind] = Math.max(maxs[ind], el);
-                        });
-                    }
-                    var toPush = [];
-                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
-                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
-                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
                     res.zombies.push({type: geom.material.replace("zombiemat_", ""), pos: toPush[0], dx: toPush[1][0], dy: toPush[1][1], dz: toPush[1][2]});
                 } else if (geom.material == "tpmat") {
                     // this is a teleporter to the next level
-                    var mins = [Infinity, Infinity, Infinity];
-                    var maxs = [-Infinity, -Infinity, -Infinity];
-                    var p = geom.data.position;
-                    for (let i=0; i<p.length; i+=3) {
-                        [p[i], p[i+1], p[i+2]].forEach((el, ind) => { // assign the max and min x, y, z values
-                            mins[ind] = Math.min(mins[ind], el);
-                            maxs[ind] = Math.max(maxs[ind], el);
-                        });
-                    }
-                    var toPush = [];
-                    toPush[0] = [avg(mins[0], maxs[0]), avg(mins[1], maxs[1]), avg(mins[2], maxs[2])];
-                    toPush[1] = [maxs[0] - mins[0], maxs[1] - mins[1], maxs[2] - mins[2]];
-                    toPush[1][0]/=2; toPush[1][1]/=2; toPush[1][2]/=2;
                     res.tps.push(toPush);
+                } else if (geom.material.startsWith("loot_")) {
+                    // this is an item
+                    // format is: loot_[type]_[tier].[%chance]
+                    // like loot_gun_a.69
+                    geom.material = geom.material.replace("loot_", "");
+                    if (Math.random() > geom.material.split(".")[1]/100) {
+                        continue;
+                    }
+                    geom.material = geom.material.split(".")[0];
+                    var sum = 0;
+                    for (var x of lootTables[geom.material]) {
+                        sum += x[0];
+                    }
+                    var rnd = Math.random() * sum;
+                    var currSum = 0;
+                    for (var x of lootTables[geom.material]) {
+                        if (currSum < rnd && currSum + x[0] >= rnd) {
+                            res.items.push([toPush[0][0], toPush[0][1], toPush[0][2],
+                                ...x[1]]);
+                            break;
+                        }
+                    }
                 }
                 else {
                     res.position = res.position.concat(geom.data.position);
@@ -179,7 +175,12 @@ var objNames = {
     skybox: "skybox",
     gun_MP40: "mp40",
     "gun_MAC M10": "mac10",
-    cartridge_9x19: "9x19 cartridge"
+    gun_PK: "pk",
+    "gun_Mosin-Nagant": "mosin",
+    "gun_AK-47": "ak",
+    "gun_AN-94": "an94",
+    cartridge_9x19: "9x19 cartridge",
+    cartridge_762: "762 cartridge"
 };
 
 var hbNames = {

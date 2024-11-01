@@ -142,18 +142,19 @@ so here's a list of things to change before zombiewars can go out of beta
 - Nades
 ~~- Change zombie behavior so that they fire in bursts only when they have line of sight~~
 ### Assets
-- Balance level 1
-    - Fix the casing hitboxes so zombies don't go outside the map
-    - Change zombie position and aggro radius so it's harder to cheese them
+- ~~Balance level 1~~
+    - ~~Fix the casing hitboxes so zombies don't go outside the map~~
+    - ~~Change zombie position and aggro radius so it's harder to cheese them~~
 - Many new levels
     - Hopefully won't take as long as the first level
 - Many new guns
 ### Other
 - Menu screen with levels
     - Also with the other things a menu screen needs like links to yt, github, etc
-- Credits menu
+- ~~Credits menu~~
+    - Make the credits a bit better
 - Pause
-- Trailer
+- ~~Trailer~~
 
 # Web workers
 ok so web workers are kind of dumb and information flow between main script and web workers is limited
@@ -170,8 +171,39 @@ since they don't cause any noticable blips in gameplay, "if it aint broke dont f
 and we will give each zombie an ID so we know which zombie it was meant for
 - we just won't worry about debug drawing the pathfinding mesh for now
 
+# Dumb distance stuff
+Ok so basically there are distances to increase performance
+
+- Bullet uses levelSpecs's physicsSimulationDistanceG as its max distance
+- Cartridge has its own maximum distance which is very small
+- Item has max and min altitudes
+- Zombie uses levelSpecs's simulationDistance for simulation and levelSpecs's renderDistance for rendering
+- Physics uses levelSpecs's physicsSimulationDistanceG for simulating green (non-kinematic) hitboxes and physicsSimulationDistanceR for simulating red (kinematic) hitboxes
+    - This is so that the green ones are loaded after the red ones, which is nessecary for items (which are green) to not fall through the floor (which is red)
+
 # Marketing
 Game colors will be orange and white
+
 Orange #ff6100 | white #FFFFFF
+
 Secondary colors are yellow and black in case we need more colors
+
 Yellow #ffd42d | black #000000
+
+# Sounds
+We're gonna register all the sounds here so we don't accidentally over use some sfx
+
+**MP40**:
+- firing: "mg36 fire" i.e hitting a box
+- reloading: "calculator reload short" i.e original reload sound
+
+**MAC-10**:
+- firing: cupboard door closing
+- reload: calculator reload as well but with an EQ boosting 1khz, with toy gun cycling sound on top
+
+**AK-47**:
+- firing: some random crack but with spectral resonator + 3-4 kick drum for a metallic effect
+- reloading: doorknob reload + small amounts of utensil reload
+
+**Mosin-Nagant**:
+- firing:

@@ -22,7 +22,19 @@ var physicsCloseTo = new Map();
 var physicsCloseTo_kin = new Map();
 var SECTORSIZE = 3;
 
+function quickIpow(base, power) {
+    // since Math.pow is slow
+    // for integers only lmao
+    // we should use binary exponentiation but im too dumb
+    var res = 1;
+    for (var i=0; i<power; i++) {
+        res *= base;
+    }
+    return res;
+}
+
 class PhysicsObject {
+    static someRandomMod = 1000000007; // for the hash function
     constructor(x, y, z, dx, dy, dz, kin, trigger = false, add = true) {
         // very simple physics engine, assumes AABB with x, y, z are the MIDDLE
         this.pos = [x, y, z];
@@ -34,6 +46,7 @@ class PhysicsObject {
         this.dx = dx; this.dy = dy; this.dz = dz;
         this.kinematic = kin;
         this.removed = false;
+        this.sleeping = true; // sleeping = not added to the collision map thingy
         if (add) {physicsObjects.push(this);}
     }
     drawBox(c = [1,0,0,1]) {
@@ -47,12 +60,19 @@ class PhysicsObject {
             [tp[0]+this.dx, tp[1]+this.dy, tp[2]+this.dz], // +++
             [tp[0]-this.dx, tp[1]-this.dy, tp[2]+this.dz], // --+
             [tp[0]-this.dx, tp[1]+this.dy, tp[2]+this.dz]  // -++
-        ]
+        ];
         IHP.debugLine(p[0], p[1], c); IHP.debugLine(p[2], p[3], c); IHP.debugLine(p[4], p[5], c); IHP.debugLine(p[6], p[7], c);
         IHP.debugLine(p[1], p[3], c); IHP.debugLine(p[3], p[5], c); IHP.debugLine(p[5], p[7], c); IHP.debugLine(p[7], p[1], c);
         IHP.debugLine(p[1-1], p[3-1], c); IHP.debugLine(p[3-1], p[5-1], c); IHP.debugLine(p[5-1], p[7-1], c); IHP.debugLine(p[7-1], p[1-1], c);
     }
     onCollision(o, normal) {}
+    getHash() {
+        // returns a hash of this physicsobject, dependent on its xyz and dx dy dz
+        // was going to be used for making sure checkCollideAABB is not called for each pair more than once
+        // but then i figured out better solution
+        return this.x + this.y * IHP.maxCoord + this.z * IHP.maxCord * IHP.maxCoord +
+            this.dx * quickIpow(IHP.maxCoord, 3) % PhysicsObject.someRandomMod + this.dy * quickIpow(IHP.maxCoord, 4) % PhysicsObject.someRandomMod + this.dz * quickIpow(IHP.maxCoord, 5) % PhysicsObject.someRandomMod;
+    }
     static checkCollision(pos1, pos2, w1, w2) { // pos1 and pos2 are the CENTER of the objects
         // doesn't do anything, just checks
         var colliding = 0;
@@ -221,10 +241,15 @@ class IHP {
     static drawLines = false;
     static maxCoord = 500;
     static lastRaycast = [[0,0,0],[0,0,0], false];
-    static simulationDistance = 50; // hitboxes with their center outside of the distance but some part of them inside will not be simulated
-                                    // this can cause problems for large hitboxes
-                                    // additionally if the simulationCenter moves very fast then the kinematics may not be regenerated in time
-                                    // so some collisions may not happen
+    // so here's an interesting problem
+    // consider an item on a floor. the floor's center is farther away from the player than the item's center.
+    // thus, the item gets simulated before the floor
+    // then it falls through the floor and is gone forever :skull:
+    // the fix for this is that there has to be two simulation distances, one for the non-kinematics and one for the kinematics
+    // additionally if the simulationCenter moves very fast then the kinematics may not be regenerated in time
+    // so some collisions may not happen
+    static simulationDistance_kin = 50;
+    static simulationDistance_notKin = 30;
     static simulationCenter = [0,0,0];
 
     static init() {
@@ -238,7 +263,12 @@ class IHP {
         for (var p of physicsObjects) {
             i++;
             if (!p.kinematic) continue;
-            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance) {continue;}
+            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance_kin) {
+                p.sleeping = true;
+                continue;
+            } else {
+                p.sleeping = false;
+            }
             var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
             var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
             var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
@@ -285,7 +315,7 @@ class IHP {
         var scaledGravity = glMatrix.vec3.create();
         glMatrix.vec3.scale(scaledGravity, PhysicsObject.GlobalGravity, dt/1000);
         for (var po of physicsObjects) {
-            if (!po.kinematic && !po.ignoresGravity) {
+            if (!po.kinematic && !po.ignoresGravity && !po.sleeping) {
                 glMatrix.vec3.add(po.vel, po.vel, scaledGravity);
 				po.pos[0] += po.vel[0] * dt/1000; po.pos[1] += po.vel[1] * dt/1000; po.pos[2] += po.vel[2] * dt/1000;
 			}
@@ -305,7 +335,12 @@ class IHP {
         for (var p of physicsObjects) {
             i++;
             if (p.kinematic) continue;
-            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance) {continue;}
+            if (glMatrix.vec3.dist(p.pos, IHP.simulationCenter) > IHP.simulationDistance_notKin) {
+                p.sleeping = true;
+                continue;
+            } else {
+                p.sleeping = false;
+            }
             var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
             var ymin = p.pos[1] - p.dy, ymax = p.pos[1] + p.dy;
             var zmin = p.pos[2] - p.dz, zmax = p.pos[2] + p.dz;
@@ -325,6 +360,11 @@ class IHP {
                 }
             }
         }
+        var alreadyCollided = [];
+        for (var p of physicsObjects) {
+            alreadyCollided.push(new Set());
+        }
+        var idx = 0;
         for (var p of physicsObjects) {
             if (p.kinematic) continue;
             var xmin = p.pos[0] - p.dx, xmax = p.pos[0] + p.dx;
@@ -333,30 +373,32 @@ class IHP {
             var x1 = xmin - xmin % SECTORSIZE, x2 = xmax - xmax % SECTORSIZE + SECTORSIZE;
             var y1 = ymin - ymin % SECTORSIZE, y2 = ymax - ymax % SECTORSIZE + SECTORSIZE;
             var z1 = zmin - zmin % SECTORSIZE, z2 = zmax - zmax % SECTORSIZE + SECTORSIZE;
-            var alreadyCollided = new Set();
             for (var x=x1; x<=x2; x+=SECTORSIZE) {
                 for (var y=y1; y<=y2; y+=SECTORSIZE) {
                     for (var z=z1; z<=z2; z+=SECTORSIZE) {
                         var hsh = x + maxCoord * y + maxCoord * maxCoord * z;
                         if (physicsCloseTo.has(hsh)) {
                             for (var p1 of physicsCloseTo.get(hsh)) {
-                                if (physicsObjects[p1] != p && !alreadyCollided.has(p1)) {
+                                if (physicsObjects[p1] != p && !alreadyCollided[idx].has(p1) && !alreadyCollided[p1].has(idx)) {
                                     PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
-                                    alreadyCollided.add(p1);
+                                    alreadyCollided[idx].add(p1);
+                                    alreadyCollided[p1].add(idx);
                                 }
                             }
                         }
                         if (physicsCloseTo_kin.has(hsh)) {
                             for (var p1 of physicsCloseTo_kin.get(hsh)) {
-                                if (physicsObjects[p1] != p && !alreadyCollided.has(p1)) {
+                                if (physicsObjects[p1] != p && !alreadyCollided[idx].has(p1) && !alreadyCollided[p1].has(idx)) {
                                     PhysicsObject.checkCollideAABB(p, physicsObjects[p1]);
-                                    alreadyCollided.add(p1);
+                                    alreadyCollided[idx].add(p1);
+                                    alreadyCollided[p1].add(idx);
                                 }
                             }
                         }
                     }
                 }
             }
+            idx++;
         }
     }
     static debugLine(p1, p2, color) {

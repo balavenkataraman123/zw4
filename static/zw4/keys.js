@@ -1,5 +1,6 @@
 var divisDownKeys = {};
-var mouseDown = false;
+var mouseDown = false; // lmb
+var rmb = false; // rmb
 
 var arrowKeySensitivity = 20;
 function onKeyDown(event) {
@@ -30,7 +31,19 @@ function processArrowKeys() {
 	if (divisDownKeys["ArrowRight"]) {onCameraTurn({movementX: arrowKeySensitivity, movementY: 0});}
 }
 
-addEventListener("mousedown", function() {mouseDown = true;});
-addEventListener("mouseup", function() {mouseDown = false;});
+addEventListener("mousedown", function(e) {
+	if (e.button == 0) {
+		mouseDown = true;
+	} else if (e.button == 2) {
+		rmb = true;
+	}
+});
+addEventListener("mouseup", function(e) {
+	if (e.button == 0) {
+		mouseDown = false;
+	} else if (e.button == 2) {
+		rmb = false;
+	}
+});
 
 setInterval(processArrowKeys, 20);
